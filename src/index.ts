@@ -16,8 +16,13 @@ export default ptag;
 ***                                                                           */
 
 export type CommentFormat = {
-  single: RegExp | string;
+  single: [start: RegExp | string, end?: null | RegExp | string];
   multi: [start: RegExp | string, end: RegExp | string];
+};
+
+const DEFAULT_COMMENT_FORMAT: CommentFormat = {
+  single: [/\/\/\s*/, null],
+  multi: [/\/\*/, /\*\//],
 };
 
 type RemoveLinesAction = {
@@ -46,24 +51,37 @@ type Directive = {
   ifFalse: Action | null;
 };
 
-// Default JavaScript comment format
-const DEFAULT_COMMENT_FORMAT: CommentFormat = {
-  single: /^\s*\/\/\s*/,
-  multi: [/\/\*/, /\*\//],
-};
 
-// Create directive regex based on comment format
+// helper to create regex from string or return existing regex
+const toRegex = (pattern: RegExp | string): RegExp =>
+  (pattern instanceof RegExp
+    ? pattern
+    : new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
 const createDirectiveRegex = (commentFormat: CommentFormat): RegExp => {
-  if (commentFormat.single instanceof RegExp) {
-    const singlePattern = commentFormat.single.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
-    return new RegExp(`^\\s*${singlePattern}\\s*##+\\[IF\\]\\s*(.+)$`);
-  } else {
-    const escapedSingle = commentFormat.single.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`^\\s*${escapedSingle}\\s*##+\\[IF\\]\\s*(.+)$`);
+  const [singleStart, singleEnd] = commentFormat.single;
+  if (singleStart instanceof RegExp) {
+    const startPattern = singleStart.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
+    if (singleEnd) {
+      const endPattern = singleEnd instanceof RegExp
+        ? singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '')
+        : singleEnd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+?)\\s*${endPattern}\\s*$`);
+    }
+    return new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+)$`);
   }
+  const escapedStart = singleStart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (singleEnd) {
+    const escapedEnd = typeof singleEnd === 'string'
+      ? singleEnd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      : singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
+    return new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+?)\\s*${escapedEnd}\\s*$`);
+  }
+  return new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+)$`);
 };
 
-// Try parsing a directive line; returns null if it isnt one
+
+// try parsing a directive line; returns null if it isnt one
 const parseDirectiveLine = (line: string, commentFormat: CommentFormat): Directive | null => {
   const REGEX_CMT_DIRECTIVE = createDirectiveRegex(commentFormat);
 
@@ -144,10 +162,6 @@ const parseDirectiveLine = (line: string, commentFormat: CommentFormat): Directi
   } as const;
 };
 
-// Helper to create regex from string or return existing regex
-const toRegex = (pattern: RegExp | string): RegExp => {
-  return pattern instanceof RegExp ? pattern : new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-};
 
 // apply/processes a directive at lines[i], mutates out, and returns the new index i
 const applyDirective = (
@@ -224,16 +238,33 @@ const applyDirective = (
 
     const multiStart = toRegex(commentFormat.multi[0]);
     const multiEnd = toRegex(commentFormat.multi[1]);
+    // check if start/end patterns equal -> like python ('''|""")
+    const sameStartEnd = multiStart.source === multiEnd.source;
 
     // if single-line comment case
     const scar = currentLine.search(multiStart);
-    const scdr = currentLine.search(multiEnd);
-    if (scar !== -1 && scdr !== -1) {
+    let scdr = -1;
+
+    if (scar !== -1) {
+      // for same start/end patterns, find the next occurrence after the start
+      if (sameStartEnd) {
+        const nextMatch = currentLine.slice(scar + 1).search(multiEnd);
+        if (nextMatch !== -1) {
+          scdr = scar + 1 + nextMatch;
+        }
+      } else {
+        // different start/end patterns
+        scdr = currentLine.search(multiEnd);
+      }
+    }
+
+    // if single-line comment case
+    if (scar !== -1 && scdr !== -1 && scdr > scar) {
       // get the actual matched comment markers to know their length
       const commentStartMatch = currentLine.slice(scar).match(multiStart);
       const commentEndMatch = currentLine.slice(scdr).match(multiEnd);
-      const commentStartLength = commentStartMatch ? commentStartMatch[0].length : 2;
-      const commentEndLength = commentEndMatch ? commentEndMatch[0].length : 2;
+      const commentStartLength = commentStartMatch ? commentStartMatch[0].length : 3;
+      const commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
 
       const beforeComment = currentLine.slice(0, scar);
       const commentContent = currentLine.slice(scar + commentStartLength, scdr);
@@ -242,13 +273,12 @@ const applyDirective = (
       // uncomment: keep the content inside and rm markers
       if (isUncomment) {
         out.push(`${beforeComment}${commentContent}${afterComment}`.replace(/\s+$/, ''));
-      } else {
-        // remove comment: comment + content -> keeping the rest of the line
-        const resultLine = `${beforeComment}${afterComment}`;
-        if (resultLine.trim().length > 0) {
-          out.push(resultLine);
-        }
+        return j;
       }
+
+      // remove comment: comment + content -> keeping the rest of the line
+      const resultLine = `${beforeComment}${afterComment}`;
+      resultLine.trim().length > 0 && out.push(resultLine);
       return j;
     }
 
@@ -257,6 +287,8 @@ const applyDirective = (
     let inComment = false;
     let beforeComment = '';
     let afterComment = '';
+    let commentStartLength = 3; // default fallback
+    let commentEndLength = 3; // default fallback
     while (j < lines.length) {
       currentLine = lines[j];
       if (!currentLine) {
@@ -264,19 +296,32 @@ const applyDirective = (
         continue;
       }
       const mcar = currentLine.search(multiStart);
-      const mcdr = currentLine.search(multiEnd);
+
       if (!inComment && mcar !== -1) {
         inComment = true;
         beforeComment = currentLine.slice(0, mcar);
         const commentStartMatch = currentLine.slice(mcar).match(multiStart);
-        const commentStartLength = commentStartMatch ? commentStartMatch[0].length : 2;
+        commentStartLength = commentStartMatch ? commentStartMatch[0].length : 3;
         const afterStart = currentLine.slice(mcar + commentStartLength);
+
+        // check for end marker on the same line (but after the start)
+        let mcdr = -1;
+        if (sameStartEnd) {
+          // if same start/end patterns -> find next occurrence
+          mcdr = afterStart.search(multiEnd);
+          // adjust to absolute position
+          if (mcdr !== -1) { mcdr = mcar + commentStartLength + mcdr; }
+        } else {
+          mcdr = currentLine.search(multiEnd);
+          // make sure end comes after start
+          if (mcdr !== -1 && mcdr <= mcar) { mcdr = -1; }
+        }
+
+        // comment ends on the same line
         if (mcdr !== -1) {
-          // comment ends on the same line
-          const commentEndMatch = afterStart.match(multiEnd);
-          const commentEndIndex = afterStart.search(multiEnd);
-          const commentEndLength = commentEndMatch ? commentEndMatch[0].length : 2;
-          commentLines.push(afterStart.slice(0, commentEndIndex));
+          const commentEndMatch = currentLine.slice(mcdr).match(multiEnd);
+          commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
+          commentLines.push(currentLine.slice(mcar + commentStartLength, mcdr));
           afterComment = currentLine.slice(mcdr + commentEndLength);
           j++;
           break;
@@ -285,11 +330,13 @@ const applyDirective = (
         j++;
         continue;
       }
+
       if (inComment) {
+        const mcdr = currentLine.search(multiEnd);
         if (mcdr !== -1) {
           commentLines.push(currentLine.slice(0, mcdr));
           const commentEndMatch = currentLine.slice(mcdr).match(multiEnd);
-          const commentEndLength = commentEndMatch ? commentEndMatch[0].length : 2;
+          commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
           afterComment = currentLine.slice(mcdr + commentEndLength);
           j++;
           break;
@@ -323,6 +370,7 @@ const applyDirective = (
 
   return i;
 };
+
 
 export const generateFromTemplate = (
   tmpl: string,
