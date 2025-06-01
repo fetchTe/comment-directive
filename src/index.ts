@@ -15,7 +15,7 @@ export default ptag;
 `) === `export default cool;`
 ***                                                                           */
 
-type CommentFormat = {
+export type CommentFormat = {
   single: RegExp | string;
   multi: [start: RegExp | string, end: RegExp | string];
 };
@@ -24,8 +24,11 @@ type RemoveLinesAction = {
   type: 'removeLines';
   count: number;
 };
+
 type RemoveCommentAction = { type: 'removeComment'; };
+
 type UncommentAction = { type: 'uncomment'; };
+
 type SedAction = {
   type: 'sed';
   pattern: string;
@@ -33,7 +36,9 @@ type SedAction = {
   flags: string[];
   lineCount: number; // number of lines to process
 };
+
 type Action = RemoveLinesAction | RemoveCommentAction | UncommentAction | SedAction;
+
 type Directive = {
   key: string;
   value: string | number | boolean;
@@ -44,7 +49,7 @@ type Directive = {
 // Default JavaScript comment format
 const DEFAULT_COMMENT_FORMAT: CommentFormat = {
   single: /^\s*\/\/\s*/,
-  multi: [/\/\*/, /\*\//]
+  multi: [/\/\*/, /\*\//],
 };
 
 // Create directive regex based on comment format
@@ -61,7 +66,7 @@ const createDirectiveRegex = (commentFormat: CommentFormat): RegExp => {
 // Try parsing a directive line; returns null if it isnt one
 const parseDirectiveLine = (line: string, commentFormat: CommentFormat): Directive | null => {
   const REGEX_CMT_DIRECTIVE = createDirectiveRegex(commentFormat);
-  
+
   // split into [cond, if-true, if-false?]
   const parts = Array.from(line.match(REGEX_CMT_DIRECTIVE) ?? [])?.[1]
     ?.split(';')
@@ -162,7 +167,9 @@ const applyDirective = (
   if ('removeLines' === action.type) { return i + action.count; }
   // sed'in -> global
   if (action.type === 'sed' && action.flags?.includes('g')) {
-    const { pattern, replacement, flags } = action;
+    const {
+      pattern, replacement, flags,
+    } = action;
     // global regex, clear, replace, re-add
     out.length = 0;
     lines.join('\n').replace(
@@ -173,7 +180,9 @@ const applyDirective = (
   }
   // sed'in
   if (action.type === 'sed') {
-    const { pattern, replacement, flags, lineCount } = action;
+    const {
+      pattern, replacement, flags, lineCount,
+    } = action;
     let j = i + 1;
     let processedLines = 0;
     const directiveRegex = createDirectiveRegex(commentFormat);
@@ -212,31 +221,34 @@ const applyDirective = (
     const isUncomment = action.type === 'uncomment';
     let currentLine = lines[j];
     if (!currentLine) { return j; }
-    
+
     const multiStart = toRegex(commentFormat.multi[0]);
     const multiEnd = toRegex(commentFormat.multi[1]);
-    
+
     // if single-line comment case
     const scar = currentLine.search(multiStart);
     const scdr = currentLine.search(multiEnd);
     if (scar !== -1 && scdr !== -1) {
-      // compensate rmed white space
-      const beforeComment = (currentLine.trim().match(multiStart) ? '  ' : '')
-        + currentLine.slice(0, scar);
+      // get the actual matched comment markers to know their length
       const commentStartMatch = currentLine.slice(scar).match(multiStart);
-      const commentStartLength = commentStartMatch ? commentStartMatch[0].length : 2;
       const commentEndMatch = currentLine.slice(scdr).match(multiEnd);
+      const commentStartLength = commentStartMatch ? commentStartMatch[0].length : 2;
       const commentEndLength = commentEndMatch ? commentEndMatch[0].length : 2;
+
+      const beforeComment = currentLine.slice(0, scar);
       const commentContent = currentLine.slice(scar + commentStartLength, scdr);
       const afterComment = currentLine.slice(scdr + commentEndLength);
-      // keep the content inside the comment and remove the markers
-      isUncomment && out.push(
-        `${beforeComment}${commentContent}${afterComment}`.replace(/\s+$/, ''),
-      );
-      // remove the comment and its content, keeping the rest of the line
-      !isUncomment
-        && `${beforeComment}${afterComment}`.trim().length
-        && out.push(`${beforeComment}${afterComment}`);
+
+      // uncomment: keep the content inside and rm markers
+      if (isUncomment) {
+        out.push(`${beforeComment}${commentContent}${afterComment}`.replace(/\s+$/, ''));
+      } else {
+        // remove comment: comment + content -> keeping the rest of the line
+        const resultLine = `${beforeComment}${afterComment}`;
+        if (resultLine.trim().length > 0) {
+          out.push(resultLine);
+        }
+      }
       return j;
     }
 
@@ -255,8 +267,7 @@ const applyDirective = (
       const mcdr = currentLine.search(multiEnd);
       if (!inComment && mcar !== -1) {
         inComment = true;
-        // compensate rmed white space
-        beforeComment = '  ' + currentLine.slice(0, mcar);
+        beforeComment = currentLine.slice(0, mcar);
         const commentStartMatch = currentLine.slice(mcar).match(multiStart);
         const commentStartLength = commentStartMatch ? commentStartMatch[0].length : 2;
         const afterStart = currentLine.slice(mcar + commentStartLength);
@@ -290,14 +301,22 @@ const applyDirective = (
       j++;
     }
 
-    // output the comment content without markers, preserving surrounding code
-    isUncomment && out.push(
-      `${beforeComment}${commentLines.join('\n')}${afterComment}`.replace(/\s+$/, ''),
-    );
-    // output only the surrounding code, removing the comment entirely
-    !isUncomment
-      && `${beforeComment}${afterComment}`.trim().length
-      && out.push(`${beforeComment}${afterComment}`);
+    // uncomment: output the comment content and preserve surrounding
+    if (isUncomment) {
+      const uncommentedContent = commentLines.join('\n');
+      const resultLine = `${beforeComment}${uncommentedContent}${afterComment}`;
+      if (resultLine.includes('\n')) {
+        // multi-line case
+        resultLine.split('\n').forEach(line => out.push(line.replace(/\s+$/, '')));
+        return j - 1;
+      }
+      out.push(resultLine.replace(/\s+$/, ''));
+      return j - 1;
+    }
+
+    // remove comment: output only the surrounding
+    const resultLine = `${beforeComment}${afterComment}`;
+    resultLine.trim().length > 0 && out.push(resultLine);
 
     return j - 1;
   }
@@ -305,7 +324,7 @@ const applyDirective = (
   return i;
 };
 
-const generateFromTemplate = (
+export const generateFromTemplate = (
   tmpl: string,
   flags: Record<string, boolean | number | string>,
   commentFormat: CommentFormat = DEFAULT_COMMENT_FORMAT,
