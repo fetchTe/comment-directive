@@ -372,10 +372,12 @@ const applyDirective = (
 };
 
 
+
 export const generateFromTemplate = (
   tmpl: string,
   flags: Record<string, boolean | number | string>,
   commentFormat: CommentFormat = DEFAULT_COMMENT_FORMAT,
+  _lastOutput = tmpl,
 ): string => {
   const lines = tmpl.split(/\r?\n/);
   const outputLines: string[] = [];
@@ -419,6 +421,11 @@ export const generateFromTemplate = (
     i = applyDirective(lines, i, dir, flags, outputLines, commentFormat);
   }
 
-  return outputLines.join('\n');
+  const results = outputLines.join('\n');
+  // nested content
+  if (_lastOutput !== results) {
+    return generateFromTemplate(results, flags, commentFormat, results);
+  }
+  return results;
 };
 
