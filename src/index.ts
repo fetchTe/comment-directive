@@ -5,14 +5,23 @@ export type CommentFormat = {
 
 export type FlagStruc = Record<string, boolean | number | string>;
 
-export type ActionRemoveLines = { type: 'removeLines'; count: number; };
+const ATYPE = {
+  rmLine: 'removeLines',
+  rmCom: 'removeComment',
+  unCom: 'uncomment',
+  sed: 'sed',
+} as const;
 
-export type ActionRemoveComment = { type: 'removeComment'; };
+type AType = typeof ATYPE;
 
-export type ActionUnComment = { type: 'uncomment'; };
+export type ActionRemoveLines = { type: AType['rmLine']; count: number; };
+
+export type ActionRemoveComment = { type: AType['rmCom']; };
+
+export type ActionUnComment = { type: AType['unCom']; };
 
 export type ActionSedReplace = {
-  type: 'sed';
+  type: AType['sed'];
   pattern: string;
   replacement: string;
   flags: string[];
@@ -28,6 +37,28 @@ export type Directive<A = Actions> = {
   ifFalse: A | null;
 };
 
+type ReDirective = {
+  dir: RegExp;
+  scar: RegExp;
+  scdr: RegExp | null;
+  mcar: RegExp;
+  mcdr: RegExp;
+};
+
+
+/**
+ * action get with type in-tack
+ * @param  {type} dir         - directive
+ * @param  {FlagStruc} flags  - flags
+ * @return {A | null}
+ */
+const getAction = <A extends Actions>(dir: Directive<A>, flags: FlagStruc): A | null => {
+  const flagVal = flags[dir.key];
+  const conditionMet = flagVal === dir.value
+    || String(flagVal) === String(dir.value);
+  return conditionMet ? dir.ifTrue : dir.ifFalse;
+};
+
 
 /**
  * type gaurd for sed action
@@ -35,7 +66,7 @@ export type Directive<A = Actions> = {
  * @return {dir is Directive<ActionSedReplace>}
  */
 const isSedDirective = (dir: Directive | null): dir is Directive<ActionSedReplace> =>
-  dir?.ifTrue?.type === 'sed' || dir?.ifFalse?.type === 'sed';
+  dir?.ifTrue?.type === ATYPE.sed || dir?.ifFalse?.type === ATYPE.sed;
 
 
 /**
@@ -59,31 +90,55 @@ const toRegex = (pattern: RegExp | string): RegExp =>
     : new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 
 
+let DIRECTIVE_RECAHCE: [CommentFormat | null, ReDirective | null] = [null, null];
 /**
  * create the regex directive pattern to match against
+ * @cached - saves us the trouble of re-initing & passing around a complex regex object
  * @param  {CommentFormat} commentFormat
- * @return {RegExp}
+ * @return {ReDirective}
  */
-const createDirectiveRegex = (commentFormat: CommentFormat): RegExp => {
+const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
+  const directiveRegex = DIRECTIVE_RECAHCE[0] === commentFormat && DIRECTIVE_RECAHCE[1]
+    ? DIRECTIVE_RECAHCE[1]
+    : null;
+  if (directiveRegex) { return directiveRegex; }
   const [singleStart, singleEnd] = commentFormat.single;
+
+  const reDir: ReDirective = {
+    dir: /$/, // so ts won't complain
+    scar: toRegex(singleStart), // single start
+    scdr: singleEnd ? toRegex(singleEnd) : null, // single end
+    mcar: toRegex(commentFormat.multi[0]), // multi start
+    mcdr: toRegex(commentFormat.multi[1]), // multi end
+  };
+
   if (singleStart instanceof RegExp) {
     const startPattern = singleStart.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
     if (singleEnd) {
       const endPattern = singleEnd instanceof RegExp
         ? singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '')
         : singleEnd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+?)\\s*${endPattern}\\s*$`);
+      reDir.dir = new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+?)\\s*${endPattern}\\s*$`);
+      DIRECTIVE_RECAHCE = [commentFormat, reDir];
+      return reDir;
     }
-    return new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+)$`);
+    reDir.dir = new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+)$`);
+    DIRECTIVE_RECAHCE = [commentFormat, reDir];
+    return reDir;
   }
+
   const escapedStart = singleStart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   if (singleEnd) {
     const escapedEnd = typeof singleEnd === 'string'
       ? singleEnd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       : singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
-    return new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+?)\\s*${escapedEnd}\\s*$`);
+    reDir.dir = new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+?)\\s*${escapedEnd}\\s*$`);
+    DIRECTIVE_RECAHCE = [commentFormat, reDir];
+    return reDir;
   }
-  return new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+)$`);
+  reDir.dir = new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+)$`);
+  DIRECTIVE_RECAHCE = [commentFormat, reDir];
+  return reDir;
 };
 
 
@@ -99,14 +154,14 @@ const parseAction = (spec: string): Actions | null => {
     return null;
   }
   if (act === 'rm') {
-    if (param === 'comment') { return { type: 'removeComment' }; }
+    if (param === 'comment') { return { type: ATYPE.rmCom }; }
     // remove X lines
     if ((/^\d+L$/).test(param)) {
-      return { type: 'removeLines', count: parseInt(param.slice(0, -1), 10) };
+      return { type: ATYPE.rmLine, count: parseInt(param.slice(0, -1), 10) };
     }
   }
-  if (act === 'un' && param === 'comment') { return { type: 'uncomment' }; }
-  if (act === 'sed') {
+  if (act === 'un' && param === 'comment') { return { type: ATYPE.unCom }; }
+  if (act === ATYPE.sed) {
     // match sed pattern like /pattern/replacement/[flags][lineCount]
     const sedMatch = param.match(/^\/(.+?)\/(.+?)\/([gim]*)(?:\d*L)?$/);
     if (!sedMatch) {
@@ -121,7 +176,7 @@ const parseAction = (spec: string): Actions | null => {
     // line count if present -> 2L
     const lineCountMatch = param.match(/(\d+)L$/);
     return {
-      type: 'sed',
+      type: ATYPE.sed,
       pattern,
       replacement,
       flags: (flags ?? '').split(''), // regex flags
@@ -179,47 +234,31 @@ const parseDirective = (parts: null | string[], line: string): Directive | null 
  * @return {number}                      - new index
  */
 const applyDirective = (
-  lines: string[],
   i: number,
-  dir: Directive,
-  flags: FlagStruc,
+  action: Actions | null,
   out: string[],
+  lines: string[],
   commentFormat: CommentFormat,
 ): number => {
-  const flagVal = flags[dir.key];
-  const conditionMet = flagVal === dir.value
-    // coerced values to string for comparision to avoid "5" != 5
-    || String(flagVal) === String(dir.value);
+  // rm the next - count lines
+  if (action?.type === ATYPE.rmLine) { return i + action.count; }
 
-  const action = conditionMet ? dir.ifTrue : dir.ifFalse;
-  // console.log('action', action)
-  // always drop the directive comment itself
-  if (!action) { return i; }
-  // skip the next - count lines
-  if ('removeLines' === action.type) { return i + action.count; }
-
-  // sed'in -> global
-  if (action.type === 'sed' && action.flags?.includes('g')) {
-    const {
-      pattern, replacement, flags,
-    } = action;
-    // global regex, clear, replace, re-add
-    out.length = 0;
-    lines.join('\n').replace(
-      new RegExp(pattern, flags.join('')),
-      replacement,
-    ).split(/\r?\n/).forEach(l => out.push(l));
-    return -1;
+  const re = createDirectiveRegex(commentFormat);
+  if (!action) {
+    // always drop the directive comment itself
+    if (lines[i] && re.dir.test(lines[i])) { return i; }
+    // if no action or action condition is not met
+    out.push(lines[i] ?? '');
+    return i;
   }
 
   // sed'in -> line
-  if (action.type === 'sed') {
+  if (action.type === ATYPE.sed) {
     const {
       pattern, replacement, flags, lineCount,
     } = action;
     let j = i + 1;
     let processedLines = 0;
-    const directiveRegex = createDirectiveRegex(commentFormat);
     while (j < lines.length && processedLines < lineCount) {
       const currentLine = lines[j];
       if (!currentLine) {
@@ -227,11 +266,14 @@ const applyDirective = (
         j++;
         continue;
       }
-      // ignore/omit stacked sed comment directives
-      if (directiveRegex.test(currentLine)) {
-        j++;
+      /* @deprecate -> handled within main commentDirective loop
+      // if comment directives, push into 'stack', to recursively runs till none left
+      if (re.dir.test(currentLine)) {
+        out.push(currentLine);
+        ++j;
         continue;
       }
+      */
       const nxt = currentLine.replace(
         new RegExp(pattern, flags.length ? flags.join('') : undefined),
         replacement,
@@ -250,127 +292,173 @@ const applyDirective = (
     return j - 1;
   }
 
-  if ('removeComment' === action.type || 'uncomment' === action.type) {
-    let j = i + 1;
-    let currentLine = lines[j];
+  const isUncomment = action.type === ATYPE.unCom;
+  // return if not rm/un comment as this is a fall-through case (should never happen)
+  if (ATYPE.rmCom !== action.type && !isUncomment) { return i; }
 
-    if (!currentLine) { return j; }
-    const isUncomment = action.type === 'uncomment';
-    const multiStart = toRegex(commentFormat.multi[0]);
-    const multiEnd = toRegex(commentFormat.multi[1]);
+  let j = i + 1;
+  let currentLine = lines[j];
+  /* @deprecate -> handled within main commentDirective loop
+  if (currentLine && re.dir.test(currentLine)) {
+    out.push(currentLine);
+    ++j;
+    currentLine = lines[j];
+  }
+  */
+  if (!currentLine) { return j; }
 
-    // check if start/end patterns equal -> like python ('''|""")
-    const sameStartEnd = multiStart.source === multiEnd.source;
 
-    // if single-line comment case
-    const scar = currentLine.search(multiStart);
-    let scdr = -1;
+  // check for single-line comment
+  const singleStartMatch = currentLine.match(re.scar);
+  if (singleStartMatch) {
+    const singleStartIndex = currentLine.search(re.scar);
+    const beforeComment = currentLine.slice(0, singleStartIndex);
 
-    if (scar !== -1) {
-      // for same start/end patterns, find the next occurrence after the start
-      if (sameStartEnd) {
-        const nextMatch = currentLine.slice(scar + 1).search(multiEnd);
-        if (nextMatch !== -1) {
-          scdr = scar + 1 + nextMatch;
+    // single-line comment with end marker (like HTML <!-- -->)
+    if (re.scdr) {
+      const singleEndIndex = currentLine.search(re.scdr);
+      if (singleEndIndex > singleStartIndex) {
+        const commentStartLength = singleStartMatch[0].length;
+        const singleEndMatch = currentLine.slice(singleEndIndex).match(re.scdr);
+        const commentEndLength = singleEndMatch ? singleEndMatch[0].length : 0;
+        const commentContent = currentLine.slice(
+          singleStartIndex + commentStartLength,
+          singleEndIndex,
+        );
+        const afterComment = currentLine.slice(singleEndIndex + commentEndLength);
+        if (isUncomment) {
+          out.push(`${beforeComment}${commentContent}${afterComment}`.replace(/\s+$/, ''));
+          return j;
         }
-      } else {
-        // different start/end patterns
-        scdr = currentLine.search(multiEnd);
+        const resultLine = `${beforeComment}${afterComment}`;
+        resultLine.trim().length > 0 && out.push(resultLine);
+        return j;
       }
     }
 
-    // if single-line comment case
-    if (scar !== -1 && scdr !== -1 && scdr > scar) {
-      // get the actual matched comment markers to know their length
-      const commentStartMatch = currentLine.slice(scar).match(multiStart);
-      const commentEndMatch = currentLine.slice(scdr).match(multiEnd);
-      const commentStartLength = commentStartMatch ? commentStartMatch[0].length : 3;
-      const commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
-
-      const beforeComment = currentLine.slice(0, scar);
-      const commentContent = currentLine.slice(scar + commentStartLength, scdr);
-      const afterComment = currentLine.slice(scdr + commentEndLength);
-
-      // uncomment: keep the content inside and rm markers
+    // single-line comment without end marker (like // or #)
+    if (!re.scdr) {
+      const commentStartLength = singleStartMatch[0].length;
+      const commentContent = currentLine.slice(singleStartIndex + commentStartLength);
       if (isUncomment) {
-        out.push(`${beforeComment}${commentContent}${afterComment}`.replace(/\s+$/, ''));
+        out.push(`${beforeComment}${commentContent}`.replace(/\s+$/, ''));
         return j;
       }
+      beforeComment.trim().length > 0 && out.push(beforeComment);
+      return j;
+    }
+  }
 
-      // remove comment: comment + content -> keeping the rest of the line
-      const resultLine = `${beforeComment}${afterComment}`;
-      resultLine.trim().length > 0 && out.push(resultLine);
+  // check if start/end patterns equal -> like python ('''|""")
+  const sameStartEnd = re.mcar.source === re.mcdr.source;
+  const scar = currentLine.search(re.mcar);
+  let scdr = -1;
+  if (scar !== -1) {
+    // for same start/end patterns, find the next occurrence after the start
+    if (sameStartEnd) {
+      const nextMatch = currentLine.slice(scar + 1).search(re.mcdr);
+      if (nextMatch !== -1) {
+        scdr = scar + 1 + nextMatch;
+      }
+    } else {
+      // different start/end patterns
+      scdr = currentLine.search(re.mcdr);
+    }
+  }
+
+  // if single-line multi-line comment case
+  if (scar !== -1 && scdr !== -1 && scdr > scar) {
+    // get the actual matched comment markers to know their length
+    const commentStartMatch = currentLine.slice(scar).match(re.mcar);
+    const commentEndMatch = currentLine.slice(scdr).match(re.mcdr);
+    const commentStartLength = commentStartMatch ? commentStartMatch[0].length : 3;
+    const commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
+
+    const beforeComment = currentLine.slice(0, scar);
+    const commentContent = currentLine.slice(scar + commentStartLength, scdr);
+    const afterComment = currentLine.slice(scdr + commentEndLength);
+
+    // uncomment: keep the content inside and rm markers
+    if (isUncomment) {
+      out.push(`${beforeComment}${commentContent}${afterComment}`.replace(/\s+$/, ''));
       return j;
     }
 
-    // multi-line comment
-    const commentLines: string[] = [];
-    let inComment = false;
-    let beforeComment = '';
-    let afterComment = '';
-    let commentStartLength = 3; // default fallback
-    let commentEndLength = 3; // default fallback
-    while (j < lines.length) {
-      currentLine = lines[j];
-      if (!currentLine) {
-        j++;
-        continue;
-      }
-      const mcar = currentLine.search(multiStart);
+    // remove comment: comment + content -> keeping the rest of the line
+    const resultLine = `${beforeComment}${afterComment}`;
+    resultLine.trim().length > 0 && out.push(resultLine);
+    return j;
+  }
 
-      if (!inComment && mcar !== -1) {
-        inComment = true;
-        beforeComment = currentLine.slice(0, mcar);
-        const commentStartMatch = currentLine.slice(mcar).match(multiStart);
-        commentStartLength = commentStartMatch ? commentStartMatch[0].length : 3;
-        const afterStart = currentLine.slice(mcar + commentStartLength);
 
-        // check for end marker on the same line (but after the start)
-        let mcdr = -1;
-        if (sameStartEnd) {
-          // if same start/end patterns -> find next occurrence
-          mcdr = afterStart.search(multiEnd);
-          // adjust to absolute position
-          if (mcdr !== -1) { mcdr = mcar + commentStartLength + mcdr; }
-        } else {
-          mcdr = currentLine.search(multiEnd);
-          // make sure end comes after start
-          if (mcdr !== -1 && mcdr <= mcar) { mcdr = -1; }
-        }
-
-        // comment ends on the same line
-        if (mcdr !== -1) {
-          const commentEndMatch = currentLine.slice(mcdr).match(multiEnd);
-          commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
-          commentLines.push(currentLine.slice(mcar + commentStartLength, mcdr));
-          afterComment = currentLine.slice(mcdr + commentEndLength);
-          j++;
-          break;
-        }
-        commentLines.push(afterStart);
-        j++;
-        continue;
-      }
-
-      if (inComment) {
-        const mcdr = currentLine.search(multiEnd);
-        if (mcdr !== -1) {
-          commentLines.push(currentLine.slice(0, mcdr));
-          const commentEndMatch = currentLine.slice(mcdr).match(multiEnd);
-          commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
-          afterComment = currentLine.slice(mcdr + commentEndLength);
-          j++;
-          break;
-        }
-        commentLines.push(currentLine);
-        j++;
-        continue;
-      }
+  // multi-line comment
+  const commentLines: string[] = [];
+  let inComment = false;
+  let beforeComment = '';
+  let afterComment = '';
+  let commentStartLength = 3; // default fallback
+  let commentEndLength = 3; // default fallback
+  while (j < lines.length) {
+    currentLine = lines[j];
+    if (!currentLine) {
       j++;
+      continue;
     }
+    const mcar = currentLine.search(re.mcar);
+    if (!inComment && mcar !== -1) {
+      inComment = true;
+      beforeComment = currentLine.slice(0, mcar);
+      const commentStartMatch = currentLine.slice(mcar).match(re.mcar);
+      commentStartLength = commentStartMatch ? commentStartMatch[0].length : 3;
+      const afterStart = currentLine.slice(mcar + commentStartLength);
 
-    // uncomment: output the comment content and preserve surrounding
+      // check for end marker on the same line (but after the start)
+      let mcdr = -1;
+      if (sameStartEnd) {
+        // if same start/end patterns -> find next occurrence
+        mcdr = afterStart.search(re.mcdr);
+        // adjust to absolute position
+        if (mcdr !== -1) { mcdr = mcar + commentStartLength + mcdr; }
+      } else {
+        mcdr = currentLine.search(re.mcdr);
+        // make sure end comes after start
+        if (mcdr !== -1 && mcdr <= mcar) { mcdr = -1; }
+      }
+
+      // comment ends on the same line
+      if (mcdr !== -1) {
+        const commentEndMatch = currentLine.slice(mcdr).match(re.mcdr);
+        commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
+        commentLines.push(currentLine.slice(mcar + commentStartLength, mcdr));
+        afterComment = currentLine.slice(mcdr + commentEndLength);
+        j++;
+        break;
+      }
+      commentLines.push(afterStart);
+      j++;
+      continue;
+    }
+    if (inComment) {
+      const mcdr = currentLine.search(re.mcdr);
+      if (mcdr !== -1) {
+        commentLines.push(currentLine.slice(0, mcdr));
+        const commentEndMatch = currentLine.slice(mcdr).match(re.mcdr);
+        commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
+        afterComment = currentLine.slice(mcdr + commentEndLength);
+        j++;
+        break;
+      }
+      commentLines.push(currentLine);
+      j++;
+      continue;
+    }
+    j++;
+  }
+
+  // uncomment: output the comment content and preserve surrounding
+  if (inComment) {
     if (isUncomment) {
+      // inComment
       const uncommentedContent = commentLines.join('\n');
       const resultLine = `${beforeComment}${uncommentedContent}${afterComment}`;
       if (resultLine.includes('\n')) {
@@ -380,16 +468,16 @@ const applyDirective = (
       }
       out.push(resultLine.replace(/\s+$/, ''));
       return j - 1;
-    }
-
-    // remove comment: only if in comment of next line is single-line comment
-    if (inComment || (currentLine && toRegex(commentFormat.single[0]).test(currentLine))) {
+    } else {
+      // remove comment: in comment
       const resultLine = `${beforeComment}${afterComment}`;
       resultLine.trim().length > 0 && out.push(resultLine);
-    } else if (currentLine) {
-      // non comment line
-      out.push(currentLine);
+      return j - 1;
     }
+  } else if (currentLine && re.scar.test(currentLine)) {
+    // remove comment: only if in comment of next line is single-line comment
+    const resultLine = `${beforeComment}${afterComment}`;
+    resultLine.trim().length > 0 && out.push(resultLine);
     return j - 1;
   }
 
@@ -420,12 +508,12 @@ export const commentDirective = (
   _lastOutput = tmpl,
 ): string => {
   const lines = tmpl.split(/\r?\n/);
-  const outputLines: string[] = [];
+  const out: string[] = [];
   const directiveRegex = createDirectiveRegex(commentFormat);
 
   // split into [cond, if-true, if-false?]
   const splitDirectiveLine = (line: string): string[] | null =>
-    Array.from(line.match(directiveRegex) ?? [])?.[1]
+    Array.from(line.match(directiveRegex.dir) ?? [])?.[1]
       ?.split(';')
       ?.map(p => p.trim())
       ?.filter(Boolean) ?? null;
@@ -436,8 +524,17 @@ export const commentDirective = (
     if (!parts) { continue; }
     const dir = parseDirective(parts, line);
     if (isSedDirectiveG(dir)) {
-      applyDirective(lines.join('\n').split('\n'), 0, dir, flags, lines, commentFormat);
-      continue;
+      const action = getAction(dir, flags);
+      if (!action) { continue; }
+      // global regex, clear, replace, re-add
+      const results = lines.join('\n').replace(
+        new RegExp(action.pattern, action.flags.join('')),
+        action.replacement,
+      );
+      // need
+      if (_lastOutput !== results) {
+        return commentDirective(results, flags, commentFormat, results);
+      }
     }
   }
 
@@ -446,22 +543,29 @@ export const commentDirective = (
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!line || !line.length) {
-      outputLines.push(line ?? '');
+      out.push(line ?? '');
       continue;
     }
     const dir = parseDirective(splitDirectiveLine(line), line);
     if (!dir) {
-      outputLines.push(line);
+      out.push(line);
       continue;
     }
-    // skip sed global
+    // skip sed global (should never happen - as global sed should be processed)
     if (isSedDirectiveG(dir)) { continue; }
+    const action = getAction(dir, flags);
+
+    // if current line is a directive, push back into 'stack', to recursively re-eval
+    while (directiveRegex.dir.test(lines[i + 1] ?? '')) {
+      out.push(lines[i + 1] ?? '');
+      ++i;
+    }
+
     // apply directive -> advancin i as needed
-    i = applyDirective(lines, i, dir, flags, outputLines, commentFormat);
+    i = applyDirective(i, action, out, lines, commentFormat);
   }
 
-  const results = outputLines.join('\n');
-  // nested comments
+  const results = out.join('\n');
   if (_lastOutput !== results) {
     return commentDirective(results, flags, commentFormat, results);
   }
@@ -469,4 +573,3 @@ export const commentDirective = (
 };
 
 export default commentDirective;
-
