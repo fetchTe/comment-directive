@@ -1,7 +1,9 @@
 export type CommentFormat = {
   single: [start: RegExp | string, end?: null | RegExp | string];
   multi: [start: RegExp | string, end: RegExp | string];
+  delimiter?: string;
 };
+
 
 export type FlagStruc = Record<string, boolean | number | string>;
 
@@ -145,9 +147,10 @@ const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
 /**
  * action directive  parser
  * @param  {string} spec
+ * @param  {CommentFormat} commentFormat
  * @return {Actions | null}
  */
-const parseAction = (spec: string): Actions | null => {
+const parseAction = (spec: string, commentFormat: CommentFormat): Actions | null => {
   const [act, param] = spec.split('=').map(s => s.trim());
   if (param === undefined) {
     console.error(`[ERR:parseAction] bad/no action param: ${spec}`);
@@ -161,9 +164,16 @@ const parseAction = (spec: string): Actions | null => {
     }
   }
   if (act === 'un' && param === 'comment') { return { type: ATYPE.unCom }; }
-  if (act === ATYPE.sed) {
-    // match sed pattern like /pattern/replacement/[flags][lineCount]
-    const sedMatch = param.match(/^\/(.+?)\/(.+?)\/([gim]*)(?:\d*L)?$/);
+  // match sed pattern like /pattern/replacement/[flags][lineCount]
+  if (act === 'sed') {
+    const delimiter = commentFormat?.delimiter ?? '/';
+    // escape the delimiter if it's a special regex character
+    const escapedDelimiter = delimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // create regex pattern using the custom delimiter
+    // eslint-disable-next-line @stylistic/function-paren-newline
+    const sedRegex = new RegExp(
+      `^${escapedDelimiter}(.+?)${escapedDelimiter}(.+?)${escapedDelimiter}([gim]*)(?:\\d*L)?$`);
+    const sedMatch = param.match(sedRegex);
     if (!sedMatch) {
       console.error(`[ERR:parseAction] bad sed syntax: ${param}`);
       return null;
@@ -185,6 +195,7 @@ const parseAction = (spec: string): Actions | null => {
         : 1,
     };
   }
+
   console.error(`[ERR:parseAction] unknown action: ${spec}`);
   return null;
 };
@@ -192,11 +203,16 @@ const parseAction = (spec: string): Actions | null => {
 
 /**
  * parse directive line or null
- * @param  {null | string[]} parts - directive parts
- * @param  {string} line           - line - used to report errors
+ * @param  {null | string[]} parts       - directive parts
+ * @param  {string} line                 - line - used to report errors
+ * @param  {CommentFormat} commentFormat - comment format
  * @return {Directive | null}
  */
-const parseDirective = (parts: null | string[], line: string): Directive | null => {
+const parseDirective = (
+  parts: null | string[],
+  line: string,
+  commentFormat: CommentFormat,
+): Directive | null => {
   if (!parts) { return null; }
   const [condSpec, ifTrue, ifFalse] = parts;
   // condSpec is like "alt=1"
@@ -217,8 +233,8 @@ const parseDirective = (parts: null | string[], line: string): Directive | null 
   return {
     key,
     value: Number.isInteger(Number(val)) ? Number(val) : val,
-    ifTrue: parseAction(ifTrue),
-    ifFalse: ifFalse ? parseAction(ifFalse) : null,
+    ifTrue: parseAction(ifTrue, commentFormat),
+    ifFalse: ifFalse ? parseAction(ifFalse, commentFormat) : null,
   } as const;
 };
 
@@ -504,11 +520,16 @@ export const commentDirective = (
   tmpl: string,
   flags: FlagStruc,
   // default js comment format
-  commentFormat: CommentFormat = { single: [/\/\/\s*/, null], multi: [/\/\*/, /\*\//] },
+  commentFormatP: Partial<CommentFormat> = {},
   _lastOutput = tmpl,
 ): string => {
   const lines = tmpl.split(/\r?\n/);
   const out: string[] = [];
+  const commentFormat: CommentFormat = Object.assign({
+    single: [/\/\/\s*/, null],
+    multi: [/\/\*/, /\*\//],
+    delimiter: '/',
+  }, commentFormatP);
   const directiveRegex = createDirectiveRegex(commentFormat);
 
   // split into [cond, if-true, if-false?]
@@ -522,7 +543,7 @@ export const commentDirective = (
   for (const line of lines) {
     const parts = splitDirectiveLine(line);
     if (!parts) { continue; }
-    const dir = parseDirective(parts, line);
+    const dir = parseDirective(parts, line, commentFormat);
     if (isSedDirectiveG(dir)) {
       const action = getAction(dir, flags);
       if (!action) { continue; }
@@ -546,7 +567,7 @@ export const commentDirective = (
       out.push(line ?? '');
       continue;
     }
-    const dir = parseDirective(splitDirectiveLine(line), line);
+    const dir = parseDirective(splitDirectiveLine(line), line, commentFormat);
     if (!dir) {
       out.push(line);
       continue;
