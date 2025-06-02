@@ -1,63 +1,69 @@
-/**                                                    @id::generateFromTemplate
-@desc: comment template metaprogramming/directive/replacer helper
- - scans for '// ###[IF]' directive & conditionally include/remove/modify based on flags
- - a line-oriented preprocessor built in lieu of a real templating engine
-@templates
-remove lines    : rm=<N>L
-remove comment  : rm=comment
-un-comment      : un=comment
-sed-like replace: sed=/pattern/replacement/[flags][<N>L]
-
-@example
-generateFromTemplate(`
-// ###[IF]is_any=1;sed=/ptag/cool/;
-export default ptag;
-`) === `export default cool;`
-***                                                                           */
-
 export type CommentFormat = {
   single: [start: RegExp | string, end?: null | RegExp | string];
   multi: [start: RegExp | string, end: RegExp | string];
 };
 
-const DEFAULT_COMMENT_FORMAT: CommentFormat = {
-  single: [/\/\/\s*/, null],
-  multi: [/\/\*/, /\*\//],
-};
+export type FlagStruc = Record<string, boolean | number | string>;
 
-type RemoveLinesAction = {
-  type: 'removeLines';
-  count: number;
-};
+export type ActionRemoveLines = { type: 'removeLines'; count: number; };
 
-type RemoveCommentAction = { type: 'removeComment'; };
+export type ActionRemoveComment = { type: 'removeComment'; };
 
-type UncommentAction = { type: 'uncomment'; };
+export type ActionUnComment = { type: 'uncomment'; };
 
-type SedAction = {
+export type ActionSedReplace = {
   type: 'sed';
   pattern: string;
   replacement: string;
   flags: string[];
-  lineCount: number; // number of lines to process
+  lineCount: number;
 };
 
-type Action = RemoveLinesAction | RemoveCommentAction | UncommentAction | SedAction;
+export type Actions = ActionRemoveLines | ActionRemoveComment | ActionUnComment | ActionSedReplace;
 
-type Directive = {
+export type Directive<A = Actions> = {
   key: string;
   value: string | number | boolean;
-  ifTrue: Action | null;
-  ifFalse: Action | null;
+  ifTrue: A | null;
+  ifFalse: A | null;
 };
 
 
-// helper to create regex from string or return existing regex
+/**
+ * type gaurd for sed action
+ * @param  {Directive | null} dir
+ * @return {dir is Directive<ActionSedReplace>}
+ */
+const isSedDirective = (dir: Directive | null): dir is Directive<ActionSedReplace> =>
+  dir?.ifTrue?.type === 'sed' || dir?.ifFalse?.type === 'sed';
+
+
+/**
+ * type gaurd for global (regex) sed action
+ * @param  {Directive | null} dir
+ * @return {dir is Directive<ActionSedReplace>}
+ */
+const isSedDirectiveG = (dir: Directive | null): dir is Directive<ActionSedReplace> =>
+  isSedDirective(dir)
+    && !!(dir?.ifTrue?.flags?.includes('g') || dir?.ifFalse?.flags?.includes('g'));
+
+
+/**
+ * helper to create regex from string or return existing regex
+ * @param  {RegExp | string} pattern
+ * @return {RegExp}
+ */
 const toRegex = (pattern: RegExp | string): RegExp =>
   (pattern instanceof RegExp
     ? pattern
     : new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 
+
+/**
+ * create the regex directive pattern to match against
+ * @param  {CommentFormat} commentFormat
+ * @return {RegExp}
+ */
 const createDirectiveRegex = (commentFormat: CommentFormat): RegExp => {
   const [singleStart, singleEnd] = commentFormat.single;
   if (singleStart instanceof RegExp) {
@@ -81,104 +87,117 @@ const createDirectiveRegex = (commentFormat: CommentFormat): RegExp => {
 };
 
 
-// try parsing a directive line; returns null if it isnt one
-const parseDirectiveLine = (line: string, commentFormat: CommentFormat): Directive | null => {
-  const REGEX_CMT_DIRECTIVE = createDirectiveRegex(commentFormat);
+/**
+ * action directive  parser
+ * @param  {string} spec
+ * @return {Actions | null}
+ */
+const parseAction = (spec: string): Actions | null => {
+  const [act, param] = spec.split('=').map(s => s.trim());
+  if (param === undefined) {
+    console.error(`[ERR:parseAction] bad/no action param: ${spec}`);
+    return null;
+  }
+  if (act === 'rm') {
+    if (param === 'comment') { return { type: 'removeComment' }; }
+    // remove X lines
+    if ((/^\d+L$/).test(param)) {
+      return { type: 'removeLines', count: parseInt(param.slice(0, -1), 10) };
+    }
+  }
+  if (act === 'un' && param === 'comment') { return { type: 'uncomment' }; }
+  if (act === 'sed') {
+    // match sed pattern like /pattern/replacement/[flags][lineCount]
+    const sedMatch = param.match(/^\/(.+?)\/(.+?)\/([gim]*)(?:\d*L)?$/);
+    if (!sedMatch) {
+      console.error(`[ERR:parseAction] bad sed syntax: ${param}`);
+      return null;
+    }
+    const [, pattern, replacement, flags] = sedMatch;
+    if (!pattern || !replacement) {
+      console.error(`[ERR:parseAction] bad sed syntax: ${param}`);
+      return null;
+    }
+    // line count if present -> 2L
+    const lineCountMatch = param.match(/(\d+)L$/);
+    return {
+      type: 'sed',
+      pattern,
+      replacement,
+      flags: (flags ?? '').split(''), // regex flags
+      lineCount: lineCountMatch?.[1]
+        ? Number.parseInt(lineCountMatch[1])
+        : 1,
+    };
+  }
+  console.error(`[ERR:parseAction] unknown action: ${spec}`);
+  return null;
+};
 
-  // split into [cond, if-true, if-false?]
-  const parts = Array.from(line.match(REGEX_CMT_DIRECTIVE) ?? [])?.[1]
-    ?.split(';')
-    ?.map(p => p.trim())
-    ?.filter(Boolean) ?? null;
+
+/**
+ * parse directive line or null
+ * @param  {null | string[]} parts - directive parts
+ * @param  {string} line           - line - used to report errors
+ * @return {Directive | null}
+ */
+const parseDirective = (parts: null | string[], line: string): Directive | null => {
   if (!parts) { return null; }
   const [condSpec, ifTrue, ifFalse] = parts;
   // condSpec is like "alt=1"
   const condMatch = condSpec?.match(/^([^=]+)=(.+)$/);
   if (!condMatch) {
-    console.error(`[ERR][tmplParse] bad condition syntax: ${line}`);
+    console.error(`[ERR:parseDirective] bad condition syntax: ${line}`);
     return null;
   }
-  const [_match, key, rawVal] = condMatch;
-  if (!key || rawVal === undefined) {
-    console.error(`[ERR][tmplParse] bad condition key/value: ${condMatch}`, { key, val: rawVal });
+  const [_match, key, val] = condMatch;
+  if (!key || val === undefined) {
+    console.error(`[ERR:parseDirective] bad condition key/value: ${condMatch}`, {key, val});
     return null;
   }
-  // coerce to number|string
-  const value = Number.isInteger(Number(rawVal))
-    ? Number(rawVal)
-    : rawVal;
   if (!ifTrue) {
-    console.error(`[ERR][tmplParse] missing required true condition: ${line}`);
+    console.error(`[ERR:parseDirective] missing required true condition: ${line}`);
     return null;
   }
-  const parseAction = (spec: string): Action | null => {
-    const [act, param] = spec.split('=').map(s => s.trim());
-    if (param === undefined) {
-      console.error(`[ERR][tmplParse] bad/no action param: ${spec}`);
-      return null;
-    }
-    if (act === 'rm') {
-      if (param === 'comment') { return { type: 'removeComment' }; }
-      // remove X lines
-      if ((/^\d+L$/).test(param)) {
-        return { type: 'removeLines', count: parseInt(param.slice(0, -1), 10) };
-      }
-    }
-    if (act === 'un' && param === 'comment') { return { type: 'uncomment' }; }
-
-    // parse sed directives
-    if (act === 'sed') {
-      // match sed pattern like /pattern/replacement/[flags][lineCount]
-      const sedMatch = param.match(/^\/(.+?)\/(.+?)\/([gim]*)(?:\d*L)?$/);
-      if (!sedMatch) {
-        console.error(`[ERR][tmplParse] bad sed syntax: ${param}`);
-        return null;
-      }
-      const [, pattern, replacement, flags] = sedMatch;
-      if (!pattern || !replacement) {
-        console.error(`[ERR][tmplParse] bad sed syntax: ${param}`);
-        return null;
-      }
-      // line count if present -> 2L
-      const lineCountMatch = param.match(/(\d+)L$/);
-      return {
-        type: 'sed',
-        pattern,
-        replacement,
-        flags: (flags ?? '').split(''), // regex flags
-        lineCount: lineCountMatch?.[1]
-          ? Number.parseInt(lineCountMatch[1])
-          : 1,
-      };
-    }
-    console.error(`[ERR][tmplParse] unknown action: ${spec}`);
-    return null;
-  };
   return {
     key,
-    value,
+    value: Number.isInteger(Number(val)) ? Number(val) : val,
     ifTrue: parseAction(ifTrue),
     ifFalse: ifFalse ? parseAction(ifFalse) : null,
   } as const;
 };
 
 
-// apply/processes a directive at lines[i], mutates out, and returns the new index i
+/**
+ * apply/processes a directive at lines[i], mutates out, and returns the new index i
+ * @param  {string[]} lines              - lines to process
+ * @param  {number} i                    - current index
+ * @param  {Directive} dir               - directive to process
+ * @param  {FlagStruc} flags             - flags to test directive against
+ * @param  {string[]} out                - output -> mutates
+ * @param  {CommentFormat} commentFormat - comment format type
+ * @return {number}                      - new index
+ */
 const applyDirective = (
   lines: string[],
   i: number,
   dir: Directive,
-  flags: Record<string, boolean | number | string>,
+  flags: FlagStruc,
   out: string[],
   commentFormat: CommentFormat,
 ): number => {
   const flagVal = flags[dir.key];
-  const conditionMet = flagVal === dir.value;
+  const conditionMet = flagVal === dir.value
+    // coerced values to string for comparision to avoid "5" != 5
+    || String(flagVal) === String(dir.value);
+
   const action = conditionMet ? dir.ifTrue : dir.ifFalse;
+  // console.log('action', action)
   // always drop the directive comment itself
   if (!action) { return i; }
   // skip the next - count lines
   if ('removeLines' === action.type) { return i + action.count; }
+
   // sed'in -> global
   if (action.type === 'sed' && action.flags?.includes('g')) {
     const {
@@ -192,7 +211,8 @@ const applyDirective = (
     ).split(/\r?\n/).forEach(l => out.push(l));
     return -1;
   }
-  // sed'in
+
+  // sed'in -> line
   if (action.type === 'sed') {
     const {
       pattern, replacement, flags, lineCount,
@@ -212,11 +232,11 @@ const applyDirective = (
         j++;
         continue;
       }
-      out.push(currentLine.replace(
-        // global regex handled seperate
+      const nxt = currentLine.replace(
         new RegExp(pattern, flags.length ? flags.join('') : undefined),
         replacement,
-      ));
+      );
+      out.push(nxt);
       j++;
       processedLines++;
     }
@@ -232,12 +252,13 @@ const applyDirective = (
 
   if ('removeComment' === action.type || 'uncomment' === action.type) {
     let j = i + 1;
-    const isUncomment = action.type === 'uncomment';
     let currentLine = lines[j];
-    if (!currentLine) { return j; }
 
+    if (!currentLine) { return j; }
+    const isUncomment = action.type === 'uncomment';
     const multiStart = toRegex(commentFormat.multi[0]);
     const multiEnd = toRegex(commentFormat.multi[1]);
+
     // check if start/end patterns equal -> like python ('''|""")
     const sameStartEnd = multiStart.source === multiEnd.source;
 
@@ -361,10 +382,14 @@ const applyDirective = (
       return j - 1;
     }
 
-    // remove comment: output only the surrounding
-    const resultLine = `${beforeComment}${afterComment}`;
-    resultLine.trim().length > 0 && out.push(resultLine);
-
+    // remove comment: only if in comment of next line is single-line comment
+    if (inComment || (currentLine && toRegex(commentFormat.single[0]).test(currentLine))) {
+      const resultLine = `${beforeComment}${afterComment}`;
+      resultLine.trim().length > 0 && out.push(resultLine);
+    } else if (currentLine) {
+      // non comment line
+      out.push(currentLine);
+    }
     return j - 1;
   }
 
@@ -372,60 +397,76 @@ const applyDirective = (
 };
 
 
-
-export const generateFromTemplate = (
+/**
+ * comment template directive/metaprogramming/replacer
+ * - scans for '// ###[IF]' directive & conditionally include/remove/modify based on flags
+ * - basically a line-oriented preprocessor built in lieu of a real templating engine
+ * @templates
+ * - remove lines    : rm=<N>L
+ * - remove comment  : rm=comment
+ * - un-comment      : un=comment
+ * - sed-like replace: sed=/pattern/replacement/[flags][<N>L]
+ * @param  {string} tmpl                   - template to process
+ * @param  {FlagStruc} flags               - directive flags
+ * @param  {[CommentFormat]} commentFormat - directive comment format - default js
+ * @param  {[type]} [_lastOutput=tmpl]     - internal - used for recur
+ * @return {string}
+ */
+export const commentDirective = (
   tmpl: string,
-  flags: Record<string, boolean | number | string>,
-  commentFormat: CommentFormat = DEFAULT_COMMENT_FORMAT,
+  flags: FlagStruc,
+  // default js comment format
+  commentFormat: CommentFormat = { single: [/\/\/\s*/, null], multi: [/\/\*/, /\*\//] },
   _lastOutput = tmpl,
 ): string => {
   const lines = tmpl.split(/\r?\n/);
   const outputLines: string[] = [];
-  const gDirectives: Directive[] = [];
+  const directiveRegex = createDirectiveRegex(commentFormat);
+
+  // split into [cond, if-true, if-false?]
+  const splitDirectiveLine = (line: string): string[] | null =>
+    Array.from(line.match(directiveRegex) ?? [])?.[1]
+      ?.split(';')
+      ?.map(p => p.trim())
+      ?.filter(Boolean) ?? null;
 
   // global sed's
   for (const line of lines) {
-    const dir = parseDirectiveLine(line, commentFormat);
-    if (dir?.ifTrue?.type === 'sed' && dir.ifTrue.flags.includes('g')) {
-      applyDirective(lines.join('\n').split('\n'), 0, dir, flags, lines, commentFormat);
-      continue;
-    }
-    if (dir?.ifFalse?.type === 'sed' && dir.ifFalse.flags.includes('g')) {
+    const parts = splitDirectiveLine(line);
+    if (!parts) { continue; }
+    const dir = parseDirective(parts, line);
+    if (isSedDirectiveG(dir)) {
       applyDirective(lines.join('\n').split('\n'), 0, dir, flags, lines, commentFormat);
       continue;
     }
   }
 
-  // @TODO: rm passin-around/mutatin outputLines logic
+  // loop the lines and apply directive
+  // @todo: remove this mutation/pass-around-logic
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!line || !line.length) {
       outputLines.push(line ?? '');
       continue;
     }
-    const dir = parseDirectiveLine(line, commentFormat);
-    // keep as-is
+    const dir = parseDirective(splitDirectiveLine(line), line);
     if (!dir) {
       outputLines.push(line);
       continue;
     }
-    if (dir?.ifTrue?.type === 'sed' && dir.ifTrue.flags.includes('g')) {
-      gDirectives.push(dir);
-      continue;
-    }
-    if (dir?.ifFalse?.type === 'sed' && dir.ifFalse.flags.includes('g')) {
-      gDirectives.push(dir);
-      continue;
-    }
+    // skip sed global
+    if (isSedDirectiveG(dir)) { continue; }
     // apply directive -> advancin i as needed
     i = applyDirective(lines, i, dir, flags, outputLines, commentFormat);
   }
 
   const results = outputLines.join('\n');
-  // nested content
+  // nested comments
   if (_lastOutput !== results) {
-    return generateFromTemplate(results, flags, commentFormat, results);
+    return commentDirective(results, flags, commentFormat, results);
   }
   return results;
 };
+
+export default commentDirective;
 
