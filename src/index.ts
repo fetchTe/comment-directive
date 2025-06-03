@@ -86,10 +86,25 @@ const isSedDirectiveG = (dir: Directive | null): dir is Directive<ActionSedRepla
  * @param  {RegExp | string} pattern
  * @return {RegExp}
  */
+const toEscapedPattern = (pattern: string): string => {
+  try {
+    // @ts-expect-error ingore & catch
+    return RegExp.escape(pattern);
+  } catch (_err) {
+    return pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+};
+
+
+/**
+ * helper to create regex from string or return existing regex
+ * @param  {RegExp | string} pattern
+ * @return {RegExp}
+ */
 const toRegex = (pattern: RegExp | string): RegExp =>
   (pattern instanceof RegExp
     ? pattern
-    : new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    : new RegExp(toEscapedPattern(pattern)));
 
 
 let DIRECTIVE_RECAHCE: [CommentFormat | null, ReDirective | null] = [null, null];
@@ -119,7 +134,7 @@ const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
     if (singleEnd) {
       const endPattern = singleEnd instanceof RegExp
         ? singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '')
-        : singleEnd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        : toEscapedPattern(singleEnd);
       reDir.dir = new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+?)\\s*${endPattern}\\s*$`);
       DIRECTIVE_RECAHCE = [commentFormat, reDir];
       return reDir;
@@ -129,10 +144,10 @@ const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
     return reDir;
   }
 
-  const escapedStart = singleStart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedStart = toEscapedPattern(singleStart);
   if (singleEnd) {
     const escapedEnd = typeof singleEnd === 'string'
-      ? singleEnd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      ? toEscapedPattern(singleEnd)
       : singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
     reDir.dir = new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+?)\\s*${escapedEnd}\\s*$`);
     DIRECTIVE_RECAHCE = [commentFormat, reDir];
@@ -167,9 +182,8 @@ const parseAction = (spec: string, commentFormat: CommentFormat): Actions | null
   // match sed pattern like /pattern/replacement/[flags][lineCount]
   if (act === 'sed') {
     const delimiter = commentFormat?.delimiter ?? '/';
-    // escape the delimiter if it's a special regex character
-    const escapedDelimiter = delimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // create regex pattern using the custom delimiter
+    const escapedDelimiter = toEscapedPattern(delimiter);
     // eslint-disable-next-line @stylistic/function-paren-newline
     const sedRegex = new RegExp(
       `^${escapedDelimiter}(.+?)${escapedDelimiter}(.+?)${escapedDelimiter}([gim]*)(?:\\d*L)?$`);
@@ -291,7 +305,7 @@ const applyDirective = (
       }
       */
       const nxt = currentLine.replace(
-        new RegExp(pattern, flags.length ? flags.join('') : undefined),
+        new RegExp(toEscapedPattern(pattern), flags.length ? flags.join('') : undefined),
         replacement,
       );
       out.push(nxt);
@@ -526,8 +540,8 @@ export const commentDirective = (
   const lines = tmpl.split(/\r?\n/);
   const out: string[] = [];
   const commentFormat: CommentFormat = Object.assign({
-    single: [/\/\/\s*/, null],
-    multi: [/\/\*/, /\*\//],
+    single: [/^\s*\/\/\s*/, null],
+    multi: [/\s*\/\*/, /\*\//],
     delimiter: '/',
   }, commentFormatP);
   const directiveRegex = createDirectiveRegex(commentFormat);
@@ -549,10 +563,9 @@ export const commentDirective = (
       if (!action) { continue; }
       // global regex, clear, replace, re-add
       const results = lines.join('\n').replace(
-        new RegExp(action.pattern, action.flags.join('')),
+        new RegExp(toEscapedPattern(action.pattern), action.flags.join('')),
         action.replacement,
       );
-      // need
       if (_lastOutput !== results) {
         return commentDirective(results, flags, commentFormat, results);
       }
