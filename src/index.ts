@@ -143,13 +143,14 @@ const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
     : null;
   if (directiveRegex) { return directiveRegex; }
   const [singleStart, singleEnd] = commentFormat.single;
+  const escape = commentFormat.escape;
 
   const reDir: ReDirective = {
     dir: /$/, // so ts won't complain
-    scar: toRegex(singleStart), // single start
-    scdr: singleEnd ? toRegex(singleEnd) : null, // single end
-    mcar: toRegex(commentFormat.multi[0]), // multi start
-    mcdr: toRegex(commentFormat.multi[1]), // multi end
+    scar: toRegex(singleStart, escape), // single start
+    scdr: singleEnd ? toRegex(singleEnd, escape) : null, // single end
+    mcar: toRegex(commentFormat.multi[0], escape), // multi start
+    mcdr: toRegex(commentFormat.multi[1], escape), // multi end
   };
 
   if (singleStart instanceof RegExp) {
@@ -157,7 +158,7 @@ const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
     if (singleEnd) {
       const endPattern = singleEnd instanceof RegExp
         ? singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '')
-        : toEscapedPattern(singleEnd);
+        : toEscapedPattern(singleEnd, escape);
       reDir.dir = new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+?)\\s*${endPattern}\\s*$`);
       DIRECTIVE_RECAHCE = [commentFormat, reDir];
       return reDir;
@@ -167,10 +168,10 @@ const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
     return reDir;
   }
 
-  const escapedStart = toEscapedPattern(singleStart);
+  const escapedStart = toEscapedPattern(singleStart, escape);
   if (singleEnd) {
     const escapedEnd = typeof singleEnd === 'string'
-      ? toEscapedPattern(singleEnd)
+      ? toEscapedPattern(singleEnd, escape)
       : singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
     reDir.dir = new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+?)\\s*${escapedEnd}\\s*$`);
     DIRECTIVE_RECAHCE = [commentFormat, reDir];
@@ -229,7 +230,7 @@ const parseAction = (spec: string, commentFormat: CommentFormat): Actions | null
   if (act === 'sed') {
     const delimiter = commentFormat?.delimiter ?? '/';
     // create regex pattern using the custom delimiter
-    const escapedDelimiter = toEscapedPattern(delimiter);
+    const escapedDelimiter = toEscapedPattern(delimiter, commentFormat.escape);
     const reEnd = `([gimuys]*)(@(?<stop>(.*)))?(?<lines>\\d*L)?$`;
     // eslint-disable-next-line @stylistic/function-paren-newline
     const sedRegex = new RegExp(
@@ -350,13 +351,15 @@ const applyDirective = (
     while (j < lines.length && (processedLines < count || stop)) {
       const currentLine = lines[j] ?? '';
       const nxt = currentLine.replace(
-        new RegExp(toEscapedPattern(pattern), flags.length ? flags.join('') : undefined),
+        new RegExp(toEscapedPattern(pattern, commentFormat.escape), flags.length
+          ? flags.join('')
+          : undefined),
         replacement,
       );
       out.push(nxt);
       j++;
       processedLines++;
-      if (stop && currentLine.match(new RegExp(toEscapedPattern(stop)))) {
+      if (stop && currentLine.match(new RegExp(toEscapedPattern(stop, commentFormat.escape)))) {
         break;
       }
 
@@ -697,7 +700,10 @@ export const commentDirective = (
           line,
           // post-line
           lines.slice(i + 1).join('\n').replace(
-            new RegExp(toEscapedPattern(action.pattern), action.flags.join('')),
+            new RegExp(
+              toEscapedPattern(action.pattern, commentFormat.escape),
+              action.flags.join(''),
+            ),
             action.replacement,
           ),
         ].join('\n');
