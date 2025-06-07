@@ -295,14 +295,6 @@ const applyDirective = (
         j++;
         continue;
       }
-      /* @deprecate -> handled within main commentDirective loop
-      // if comment directives, push into 'stack', to recursively runs till none left
-      if (re.dir.test(currentLine)) {
-        out.push(currentLine);
-        ++j;
-        continue;
-      }
-      */
       const nxt = currentLine.replace(
         new RegExp(toEscapedPattern(pattern), flags.length ? flags.join('') : undefined),
         replacement,
@@ -327,13 +319,6 @@ const applyDirective = (
 
   let j = i + 1;
   let currentLine = lines[j];
-  /* @deprecate -> handled within main commentDirective loop
-  if (currentLine && re.dir.test(currentLine)) {
-    out.push(currentLine);
-    ++j;
-    currentLine = lines[j];
-  }
-  */
   if (!currentLine) { return j; }
 
 
