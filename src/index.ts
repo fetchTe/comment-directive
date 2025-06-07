@@ -19,8 +19,8 @@ export type CommentFormat = {
   multi: [start: RegExp | string, end: RegExp | string];
   /* disable white-space logic when removing/uncommenting (default: true) */
   spaceAdjust?: false;
-  /* keep retain directive comments in the output (default: false) */
-  commentKeep?: true;
+  /* keep directive comments in the output (default: false) */
+  keepDirective?: true;
   /* change sed delimiter (default: '/') */
   delimiter?: string;
   /* escape sed (default: true) */
@@ -629,17 +629,15 @@ export const commentDirective = (
   const commentFormat = commentFormatP as CommentFormat;
   // rather than object.assign we set props to better cache createDirectiveRegex
   if (!commentFormat.delimiter) { commentFormat.delimiter = '/'; }
-  // if (commentFormat.spaceAdjust !== false) { commentFormat.spaceAdjust = true; }
   if (!commentFormat.single) { commentFormat.single = [/^\s*\/\/\s*/, null]; }
   if (!commentFormat.multi) { commentFormat.multi = [/\s*\/\*/, /\*\//]; }
 
-  const ckeep = commentFormat.commentKeep;
+  const dkeep = commentFormat.keepDirective;
   const directiveRegex = createDirectiveRegex(commentFormat);
 
   // split into [cond, if-true, if-false?]
   const splitDirectiveLine = (line: string): string[] | null => {
     let match = Array.from(line.match(directiveRegex.dir) ?? [])?.[1];
-    // let match = 'env=prod;sed=##aa;##//##mu'
     if (!match) { return null; }
     match = match.replace(/;$/, ''); // rm trailing ;
     const rems = Array.from(match.matchAll(new RegExp(`;(${APREFIXS.join('|')})`, 'g')));
@@ -665,7 +663,7 @@ export const commentDirective = (
   let offsetStack = 0;
   const addStack = ([idx, line]: [idx: number, line: string]) => {
     // if not keeping comments we can ignore all stack/logic
-    if (!ckeep) { return; }
+    if (!dkeep) { return; }
     // check if the prvious cmt removed lines and offset the insert idx
     const prv = _cstack[_cstack.length - 1];
     const dir = prv
@@ -692,7 +690,7 @@ export const commentDirective = (
       if (isSedDirectiveG(dir)) {
         const action = getAction(dir, flags);
         if (!action) { continue; }
-        ckeep && _cstack.push([i, line]);
+        dkeep && _cstack.push([i, line]);
         // global regex, clear, replace, re-add
         const results = [
           lines.slice(0, i).join('\n'), // pre-line
@@ -729,19 +727,19 @@ export const commentDirective = (
 
     // skip sed global (should never happen - as global sed should be processed)
     if (isSedDirectiveG(dir)) {
-      ckeep && _cstack.push([out.length, line]);
+      dkeep && _cstack.push([out.length, line]);
       continue;
     }
     const action = getAction(dir, flags);
 
     let iadd = i;
-    ckeep && addStack([iadd, line]);
+    dkeep && addStack([iadd, line]);
     // this while loop handles 'stacked' comment directives by pusing them
     // back into 'out', to recursively evaluate, next time around, again, and again
     while (directiveRegex.dir.test(lines[i + 1] ?? '')) {
       out.push(lines[i + 1] ?? '');
       ++iadd;
-      ckeep && addStack([i + 1, lines[i + 1] ?? '']);
+      dkeep && addStack([i + 1, lines[i + 1] ?? '']);
       ++i;
     }
 
@@ -762,7 +760,7 @@ export const commentDirective = (
   }
 
   // not keeping comments
-  if (!ckeep) { return results; }
+  if (!dkeep) { return results; }
 
   // re-insert comments
   const cout: string[] = [];
