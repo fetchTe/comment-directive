@@ -535,7 +535,16 @@ export const commentDirective = (
   // default js comment format
   commentFormatP: Partial<CommentFormat> = {},
   _lastOutput = tmpl,
+  _iquitAt = 0,
 ): string => {
+  // if we hit 10,000 loop (which should never happen, but could) we bail
+  ++_iquitAt;
+  if (_iquitAt > 1e4) {
+    throw new Error([
+      `[commentDirective] 10,000-loop limit was hit, either a recursive loop or`,
+      `an absurd use-case; instead of going to infinity and beyond, bailing...`,
+    ].join(' '));
+  }
   const lines = tmpl.split(/\r?\n/);
   const out: string[] = [];
   const commentFormat: CommentFormat = Object.assign({
