@@ -168,7 +168,7 @@ const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
 const parseAction = (spec: string, commentFormat: CommentFormat): Actions | null => {
   const [act, param] = spec.split('=').map(s => s.trim());
   if (param === undefined) {
-    console.error(`[ERR:parseAction] bad/no action param: ${spec}`);
+    console.error(`[commentDirective:parseAction] bad/no action param: ${spec}`);
     return null;
   }
   if (act === 'rm') {
@@ -189,12 +189,12 @@ const parseAction = (spec: string, commentFormat: CommentFormat): Actions | null
       `^${escapedDelimiter}(.+?)${escapedDelimiter}(.+?)${escapedDelimiter}([gim]*)(?:\\d*L)?$`);
     const sedMatch = param.match(sedRegex);
     if (!sedMatch) {
-      console.error(`[ERR:parseAction] bad sed syntax: ${param}`);
+      console.error(`[commentDirective:parseAction] bad sed syntax: ${param}`);
       return null;
     }
     const [, pattern, replacement, flags] = sedMatch;
-    if (!pattern || !replacement) {
-      console.error(`[ERR:parseAction] bad sed syntax: ${param}`);
+    if (typeof pattern !== 'string' || typeof replacement !== 'string') {
+      console.error(`[commentDirective:parseAction] bad sed match: ${param}`);
       return null;
     }
     // line count if present -> 2L
@@ -209,8 +209,7 @@ const parseAction = (spec: string, commentFormat: CommentFormat): Actions | null
         : 1,
     };
   }
-
-  console.error(`[ERR:parseAction] unknown action: ${spec}`);
+  console.error(`[commentDirective:parseAction] unknown action: ${spec}`);
   return null;
 };
 
@@ -232,16 +231,16 @@ const parseDirective = (
   // condSpec is like "alt=1"
   const condMatch = condSpec?.match(/^([^=]+)=(.+)$/);
   if (!condMatch) {
-    console.error(`[ERR:parseDirective] bad condition syntax: ${line}`);
+    console.error(`[commentDirective:parseDirective] no/bad condition match: ${line}`);
     return null;
   }
   const [_match, key, val] = condMatch;
   if (!key || val === undefined) {
-    console.error(`[ERR:parseDirective] bad condition key/value: ${condMatch}`, {key, val});
+    console.error(`[commentDirective:parseDirective] bad condition key/value`, {key, val});
     return null;
   }
   if (!ifTrue) {
-    console.error(`[ERR:parseDirective] missing required true condition: ${line}`);
+    console.error(`[commentDirective:parseDirective] missing required true condition: ${line}`);
     return null;
   }
   return {
