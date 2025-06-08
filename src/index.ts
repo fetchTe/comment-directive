@@ -122,7 +122,8 @@ type ReDirective = {
  * @param  {FlagStruc} flags  - flags
  * @return {A | null}
  */
-const getAction = <A extends Actions>(dir: Directive<A>, flags: FlagStruc): A | null => {
+const getAction = <A extends Actions>(dir?: Directive<A> | null, flags?: FlagStruc): A | null => {
+  if (!dir || !flags) { return null; }
   const flagVal = flags[dir.key];
   const conditionMet = flagVal === dir.value
     || String(flagVal) === String(dir.value);
@@ -152,7 +153,7 @@ const isSeqAction = (act?: Actions): act is ActionSequence =>
  * @return {dir is Directive<ActionSedReplace>}
  */
 const isSedDirective = (dir: Directive | null): dir is Directive<ActionSedReplace> =>
-  dir?.ifTrue?.type === AKEYS.sed || dir?.ifFalse?.type === AKEYS.sed;
+  dir?.ifTrue?.type === ACT_MAP.sed || dir?.ifFalse?.type === ACT_MAP.sed;
 
 
 /**
@@ -381,13 +382,13 @@ export const parseAction = /* @__PURE__ */ (() => {
  * parse directive line or null
  * @param  {null | string[]} parts       - directive parts
  * @param  {string} line                 - line - used to report errors
- * @param  {CommentFormat} options - comment format
+ * @param  {Options} options - comment format
  * @return {Directive | null}
  */
 const parseDirective = (
   parts: null | string[],
   line: string,
-  options: CommentFormat,
+  options: Options,
 ): Directive | null => {
   if (!parts) { return null; }
   const [condSpec, ifTrue, ifFalse] = parts;
@@ -426,7 +427,7 @@ const parseDirective = (
  * @param  {Directive} dir               - directive to process
  * @param  {FlagStruc} flags             - flags to test directive against
  * @param  {string[]} out                - output -> mutates
- * @param  {CommentFormat} options - comment format type
+ * @param  {Options} options - comment format type
  * @return {number}                      - new index
  */
 const applyDirective = (
@@ -434,11 +435,11 @@ const applyDirective = (
   action: Actions | null,
   out: string[],
   lines: string[],
-  options: CommentFormat,
+  options: Options,
   addStack: ([idx, line]: [idx: number, line: string])=> void,
 ): number => {
   // rm the next - count lines
-  if (action?.type === AKEYS.rmLine) { return i + action.count; }
+  if (action?.type === ACT_MAP.rml) { return i + action.count; }
   const re = createDirectiveRegex(options);
 
   // if no action or action condition is not met
@@ -455,7 +456,7 @@ const applyDirective = (
   let j = i + 1;
 
   // sed'in -> line
-  if (action.type === AKEYS.sed) {
+  if (action.type === ACT_MAP.sed) {
     const {
       pattern,
       replacement,
@@ -489,8 +490,6 @@ const applyDirective = (
     }
     return j - 1;
   }
-  const isUncomment = action.type === AKEYS.unCom;
-  const isRmcomment = action.type === AKEYS.rmCom;
 
   // append/prepend/shift/pop
   if (isSeqAction(action)) {
@@ -529,6 +528,10 @@ const applyDirective = (
     }
     return j - 1;
   }
+
+
+  const isUncomment = action.type === ACT_MAP.unc;
+  const isRmcomment = action.type === ACT_MAP.rmc;
   // return if not rm/un comment as this is a fall-through case (should never happen)
   if (!isRmcomment && !isUncomment) { return i; }
 
@@ -755,25 +758,23 @@ const applyDirective = (
  * - sed-like replace: sed=/pattern/replacement/[flags][<N>L]
  * @param  {string} tmpl                   - template to process
  * @param  {FlagStruc} flags               - directive flags
- * @param  {[CommentFormat]} options - directive comment format - default js
+ * @param  {[Options]} options - directive comment format - default js
  * @param  {string | null} [_last=null]    - internal/ used for recursive logic
  * @param  {[number, string][]} _cstack    - internal/ tracks cmt directive re-insert loc
  * @param  {number} [_iglobal=-1]          - internal/ tracks global sed 'i' line
  * @param  {number} [_iquitAt=0]           - internal/ prevents infinity loop
  * @return {string}
-
  */
 export const commentDirective = (
   tmpl: string,
   flags: FlagStruc,
-  // default js comment format
-  optionsP: Partial<CommentFormat> = {},
+  optionsP: Partial<Options> = {},
   _last: null | string = null,
   _cstack: [number, string][] = [],
-  _iglobal = -1,
+  _iglobal = 0,
   _iquitAt = 0,
 ): string => {
-  // if we hit 10,000 loop (which should never happen, but could) we bail
+  // if we hit 10,000 loop (should never happen, but could if bad user sed directive) we bail
   ++_iquitAt;
   if (_iquitAt > 1e4) {
     throw new Error([
@@ -783,9 +784,10 @@ export const commentDirective = (
   }
   const lines = tmpl.split(/\r?\n/);
   const out: string[] = [];
-  const options = optionsP as CommentFormat;
+  const options = optionsP as Options;
   // rather than object.assign we set props to better cache createDirectiveRegex
   if (!options.delimiter) { options.delimiter = '/'; }
+  // default js comment format
   if (!options.single) { options.single = [/^\s*\/\/\s*/, null]; }
   if (!options.multi) { options.multi = [/\s*\/\*/, /\*\//]; }
 
@@ -794,18 +796,19 @@ export const commentDirective = (
 
   // split into [cond, if-true, if-false?]
   const splitDirectiveLine = (line: string): string[] | null => {
-    let match = Array.from(line.match(directiveRegex.dir) ?? [])?.[1];
+    // much faster to do a indexOf check initially
+    if (line.indexOf('###[IF]') === -1) { return null; }
+    let match = directiveRegex.dir.exec(line)?.[1];
     if (!match) { return null; }
-    match = match.replace(/;$/, ''); // rm trailing ;
-    const rems = Array.from(match.matchAll(new RegExp(`;(${APREFIXS.join('|')})`, 'g')));
+    PREFIXES_RE.lastIndex = 0; // reset regex
+    // rm trailing ;
+    if (match[match.length - 1] === ';') { match = match.slice(0, -1); }
     const result: string[] = [];
     let lastIndex = 0;
-    for (const rem of rems) {
+    for (const rem of match.matchAll(PREFIXES_RE)) {
       const index = rem.index;
       // add the substring from the last index to the current index
-      if (index > lastIndex) {
-        result.push(match.substring(lastIndex, index));
-      }
+      index > lastIndex && result.push(match.substring(lastIndex, index));
       lastIndex = index;
     }
     // add the remaining part of the string after the last index
@@ -813,7 +816,7 @@ export const commentDirective = (
     // must have an action and at least one condition
     if (1 > result.length) { return null; }
     // rm leading ; in conds like ;un=comment
-    return result.map(v => v.replace(/^;/, ''));
+    return result.map(v => (v[0] === ';' ? v.slice(1) : v));
   };
 
   // determines line offset, required for position if/when lines are removed (a recursive headache)
@@ -828,7 +831,7 @@ export const commentDirective = (
       : null;
     if (dir) {
       const action = getAction(dir, flags);
-      if (action?.type === AKEYS.rmLine) {
+      if (action?.type === ACT_MAP.rml) {
         offsetStack = offsetStack + action.count;
       }
     }
@@ -838,41 +841,35 @@ export const commentDirective = (
   };
 
   // global sed loop(s)
-  if (_iglobal) {
-    for (let i = (0 > _iglobal ? 0 : _iglobal); i < lines.length; i++) {
-      const line = lines[i] as string;
-      const parts = splitDirectiveLine(line);
-      if (!parts) { continue; }
-      const dir = parseDirective(parts, line, options);
-      if (isSedDirectiveG(dir)) {
-        const action = getAction(dir, flags);
-        if (!action) { continue; }
-        dkeep && _cstack.push([i, line]);
-        // global regex, clear, replace, re-add
-        const results = [
-          lines.slice(0, i).join('\n'), // pre-line
-          line,
-          // post-line
-          lines.slice(i + 1).join('\n').replace(
-            new RegExp(
-              toEscapedPattern(action.pattern, options.escape),
-              action.flags.join(''),
-            ),
-            action.replacement,
-          ),
-        ].join('\n');
-
-        if (_last === results) { continue; }
-        return commentDirective(results, flags, options, results, _cstack, i + 1, _iquitAt);
-      }
-    }
-
-    // re-add global sed directive now that they have been processed
-    for (const [idx, line] of _cstack.reverse()) {
-      lines[idx] = line;
-    }
-    _cstack.length = 0;
+  for (let i = _iglobal; i < lines.length; i++) {
+    const line = lines[i] as string;
+    const parts = splitDirectiveLine(line);
+    if (!parts) { continue; }
+    const dir = parseDirective(parts, line, options);
+    if (!isSedDirectiveG(dir)) { continue; }
+    const action = getAction(dir, flags);
+    if (!action) { continue; }
+    let targ = lines.slice(i + 1);
+    // limit to N lines
+    const post: string[] = action.count ? targ.slice(action.count) : [];
+    targ = action.count ? targ.slice(0, action.count) : targ;
+    const results = [
+      lines.slice(0, i).join('\n'), // pre-line
+      line,
+      // post-line
+      targ.join('\n').replace(
+        new RegExp(
+          toEscapedPattern(action.pattern, options.escape),
+          action.flags.join(''),
+        ),
+        action.replacement,
+      ),
+    ].concat(post).join('\n');
+    if (_last === results) { continue; }
+    return commentDirective(results, flags, options, results, _cstack, i + 1, _iquitAt);
   }
+  _iglobal = lines.length;
+
 
   // non-global sed loop(s)
   // @todo: remove this mutation/pass-around-logic
@@ -885,9 +882,9 @@ export const commentDirective = (
       continue;
     }
 
-    // skip sed global (should never happen - as global sed should be processed)
+    // skip sed global (should only happen if keeping directive)
     if (isSedDirectiveG(dir)) {
-      dkeep && _cstack.push([out.length, line]);
+      dkeep && out.push(line);
       continue;
     }
     const action = getAction(dir, flags);
@@ -908,7 +905,7 @@ export const commentDirective = (
     i = applyDirective(i, action, out, lines, options, addStack);
 
     // since rm'ing a comment doesn't always remove a line this calculates diff
-    if (action?.type === AKEYS.rmCom) {
+    if (action?.type === ACT_MAP.rmc) {
       offsetStack = offsetStack + ((i - iprv) - (out.length - iout));
     }
   }
