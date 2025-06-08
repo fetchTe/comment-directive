@@ -192,59 +192,61 @@ const toRegex = (pattern: RegExp | string, regexEscape = true): RegExp =>
     : new RegExp(toEscapedPattern(pattern, regexEscape)));
 
 
-// simple ref eq tuple cache for createDirectiveRegex since its somewhat expensive
-let DIRECTIVE_RECAHCE: [CommentFormat | null, ReDirective | null] = [null, null];
-
 /**
  * create the regex directive pattern to match against
  * @cached - saves us the trouble of re-initing & passing around a complex regex object
- * @param  {CommentFormat} options
+ * @param  {Options} options
  * @return {ReDirective}
  */
-const createDirectiveRegex = (options: CommentFormat): ReDirective => {
-  const directiveRegex = DIRECTIVE_RECAHCE[0] === options && DIRECTIVE_RECAHCE[1]
-    ? DIRECTIVE_RECAHCE[1]
-    : null;
-  if (directiveRegex) { return directiveRegex; }
-  const [singleStart, singleEnd] = options.single;
-  const escape = options.escape;
+export const createDirectiveRegex = /* @__PURE__ */ (() => {
+  // strict equality cache based on options - option Map/WeakMap not worth overhead
+  let cache: ReDirective | null = null;
+  let lastOptions: Options | null = null;
+  return (options: Options): ReDirective => {
+    // clear cache if options changed
+    if (lastOptions !== options) {
+      cache = null;
+      lastOptions = options;
+    }
+    // check cache
+    if (cache) { return cache; }
+    const [singleStart, singleEnd] = options.single;
+    const escape = options.escape;
 
-  const reDir: ReDirective = {
-    dir: /$/, // so ts won't complain
-    scar: toRegex(singleStart, escape), // single start
-    scdr: singleEnd ? toRegex(singleEnd, escape) : null, // single end
-    mcar: toRegex(options.multi[0], escape), // multi start
-    mcdr: toRegex(options.multi[1], escape), // multi end
-  };
+    cache = {
+      dir: /$/, // so ts won't complain
+      scar: toRegex(singleStart, escape), // single start
+      scdr: singleEnd ? toRegex(singleEnd, escape) : null, // single end
+      mcar: toRegex(options.multi[0], escape), // multi start
+      mcdr: toRegex(options.multi[1], escape), // multi end
+    };
 
-  if (singleStart instanceof RegExp) {
-    const startPattern = singleStart.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
-    if (singleEnd) {
+    if (singleStart instanceof RegExp) {
+      const startPattern = singleStart.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
+      if (!singleEnd) {
+        cache.dir = new RegExp(`^\\s*${startPattern}\\s*###\\[IF\\](.+)$`);
+        return cache;
+      }
       const endPattern = singleEnd instanceof RegExp
         ? singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '')
         : toEscapedPattern(singleEnd, escape);
-      reDir.dir = new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+?)\\s*${endPattern}\\s*$`);
-      DIRECTIVE_RECAHCE = [options, reDir];
-      return reDir;
+      // eslint-disable-next-line @stylistic/max-len
+      cache.dir = new RegExp(`^\\s*${startPattern}\\s*###\\[IF\\](.+?)\\s*${endPattern}\\s*$`);
+      return cache;
     }
-    reDir.dir = new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+)$`);
-    DIRECTIVE_RECAHCE = [options, reDir];
-    return reDir;
-  }
 
-  const escapedStart = toEscapedPattern(singleStart, escape);
-  if (singleEnd) {
+    const escapedStart = toEscapedPattern(singleStart, escape);
+    if (!singleEnd) {
+      cache.dir = new RegExp(`^\\s*${escapedStart}\\s*###\\[IF\\](.+)$`);
+      return cache;
+    }
     const escapedEnd = typeof singleEnd === 'string'
       ? toEscapedPattern(singleEnd, escape)
       : singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
-    reDir.dir = new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+?)\\s*${escapedEnd}\\s*$`);
-    DIRECTIVE_RECAHCE = [options, reDir];
-    return reDir;
-  }
-  reDir.dir = new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+)$`);
-  DIRECTIVE_RECAHCE = [options, reDir];
-  return reDir;
-};
+    cache.dir = new RegExp(`^\\s*${escapedStart}\\s*###\\[IF\\](.+?)\\s*${escapedEnd}\\s*$`);
+    return cache;
+  };
+})();
 
 
 // -----------------------------------------------------------------------------
@@ -254,55 +256,63 @@ const createDirectiveRegex = (options: CommentFormat): ReDirective => {
 /**
  * action directive  parser
  * @param  {string} spec
- * @param  {CommentFormat} options
+ * @param  {Options} options
  * @return {Actions | null}
  */
-const parseAction = (spec: string, options: CommentFormat): Actions | null => {
-  let split: null | [string, string] = null;
-  for (const item of APREFIXS) {
-    const iact = `${item}=`;
-    if (spec.startsWith(iact)) {
-      split = [iact.replace('=', ''), spec.replace(iact, '')];
-      break;
+export const parseAction = /* @__PURE__ */ (() => {
+  // strict equality cache based on options - option Map/WeakMap not worth overhead
+  const cache = new Map<string, Actions | null>();
+  let lastOptions: Options | null = null;
+  return (spec: string, options: Options): Actions | null => {
+    // clear cache if options changed
+    if (lastOptions !== options) {
+      cache.clear();
+      lastOptions = options;
     }
-  }
+    // check cache
+    if (cache.has(spec)) { return cache.get(spec)!; }
 
-  const [act, param] = split ?? [];
-  if (param === undefined) {
-    console.error(`[commentDirective:parseAction] bad/no action param: ${spec}`);
-    return null;
-  }
-  // line count if present -> 2L
-  const lineCountMatch = param.match(/(\d+)L$/);
-  const count = lineCountMatch?.[1]
-    ? Number.parseInt(lineCountMatch[1])
-    : 1;
+    let split: null | [string, string] = null;
+    for (const item of PREFIXES) {
+      const iact = `${item}=`;
+      if (spec.startsWith(iact)) {
+        split = [iact.replace('=', ''), spec.replace(iact, '')];
+        break;
+      }
+    }
 
-  // remove X lines
-  if (act === 'rm' && (param.startsWith('line') || (/^\d+L$/).test(param))) {
-    return { type: AKEYS.rmLine, count };
-  }
-
-  // comment
-  if (param.startsWith('comment')) {
-    // @note -> cound is passed, but not implemented, probs not worth effort/overhead
-    if (act === 'rm') { return { type: AKEYS.rmCom, count }; }
-    if (act === 'un') { return { type: AKEYS.unCom, count }; }
-  }
-
-  // match sed pattern like /pattern/replacement/[flags][lineCount]
-  if (act === 'sed') {
-    const delimiter = options?.delimiter ?? '/';
-    // create regex pattern using the custom delimiter
-    const escapedDelimiter = toEscapedPattern(delimiter, options.escape);
-    const reEnd = `([gimuys]*)(@(?<stop>(.*)))?(?<lines>\\d*L)?$`;
-    // eslint-disable-next-line @stylistic/function-paren-newline
-    const sedRegex = new RegExp(
-      `^${escapedDelimiter}(.*?)${escapedDelimiter}(.*?)${escapedDelimiter}${reEnd}`);
-    const sedMatch = param.match(sedRegex);
-    if (!sedMatch) {
-      console.error(`[commentDirective:parseAction] bad sed syntax: ${param}`);
+    const [act, param] = split ?? [];
+    if (param === undefined) {
+      console.error(`[commentDirective:parseAction] bad/no action param: ${spec}`);
       return null;
+    }
+    // line count if present -> 2L
+    const lineCountMatch = param.match(/(\d+)L$/);
+    const count = lineCountMatch?.[1]
+      ? Number.parseInt(lineCountMatch[1])
+      : (act === 'sed' ? 0 : 1);
+
+    // remove X lines
+    if (act === 'rm' && (param.startsWith('line') || (/^\d+L$/).test(param))) {
+      const result = { type: ACT_MAP.rml, count };
+      cache.set(spec, result);
+      return result;
+    }
+
+    // comment
+    if (param.startsWith('comment')) {
+      const atype = act === 'un' ? ACT_MAP.unc : act === 'rm' ? ACT_MAP.rmc : null;
+      if (!atype) {
+        // eslint-disable-next-line @stylistic/max-len
+        console.error(`[commentDirective:parseAction] 'comment' only works with 'rm' or 'un' - not '${act}': ${param}`);
+        return null;
+      }
+      // @note -> cound is passed, but not implemented, probs not worth effort/overhead
+      const result = { type: atype, count };
+      cache.set(spec, result);
+      return result;
+    }
+
     // append/prepend/shift/pop
     if (isSeqActionType(act)) {
       // create regex pattern using the custom delimiter
@@ -326,25 +336,45 @@ const parseAction = (spec: string, options: CommentFormat): Actions | null => {
       cache.set(spec, result);
       return result;
     }
-    const [, pattern, replacement, flags] = sedMatch;
-    if (typeof pattern !== 'string' || typeof replacement !== 'string') {
-      console.error(`[commentDirective:parseAction] bad sed match: ${param}`);
-      return null;
-    }
-    const stop = sedMatch?.groups?.['stop'] ?? null;
 
-    return {
-      type: AKEYS.sed,
-      pattern,
-      replacement,
-      flags: (flags ?? '').split(''), // regex flags
-      count,
-      stop,
-    };
-  }
-  console.error(`[commentDirective:parseAction] unknown action: ${spec}`);
-  return null;
-};
+    // match sed pattern like /pattern/replacement/[flags][lineCount]
+    if (act === 'sed') {
+      const delimiter = options?.delimiter ?? '/';
+      // create regex pattern using the custom delimiter
+      const escapedDelimiter = toEscapedPattern(delimiter, options.escape);
+      const meta = `([gimuys]*)(@(?<stop>(.*)))?(?<lines>\\d*L)?$`;
+      // eslint-disable-next-line @stylistic/function-paren-newline
+      const sedRegex = new RegExp(
+        `^${escapedDelimiter}(.*?)${escapedDelimiter}(.*?)${escapedDelimiter}${meta}`);
+      const sedMatch = param.match(sedRegex);
+      if (!sedMatch) {
+        console.error(`[commentDirective:parseAction] bad sed syntax: ${param}`);
+        return null;
+      }
+      const [, pattern, replacement, flags] = sedMatch;
+      if (typeof pattern !== 'string' || typeof replacement !== 'string') {
+        console.error(`[commentDirective:parseAction] bad sed match: ${param}`);
+        return null;
+      }
+      const stop = sedMatch?.groups?.['stop'] ?? null;
+
+      const result = {
+        type: ACT_MAP.sed,
+        pattern,
+        replacement,
+        flags: (flags ?? '').split(''), // regex flags
+        // if not global we re-set could to default 1
+        count: !count && !flags?.includes('g') ? 1 : count,
+        stop,
+      };
+      cache.set(spec, result);
+      return result;
+    }
+
+    console.error(`[commentDirective:parseAction] unknown action: ${spec}`);
+    return null;
+  };
+})();
 
 
 /**
