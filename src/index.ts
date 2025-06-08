@@ -1,20 +1,34 @@
 // -----------------------------------------------------------------------------
 // @id::constants
 // -----------------------------------------------------------------------------
-const AKEYS = {
-  rmLine: 'removeLines',
-  rmCom: 'removeComment',
-  unCom: 'uncomment',
+const ACT_MAP = {
+  rml: 'rm_line',
+  rmc: 'rm_comment',
+  unc: 'un_comment',
   sed: 'sed',
+  append: 'append',
+  prepend: 'prepend',
+  unshift: 'unshift',
+  push: 'push',
+  shift: 'shift',
+  pop: 'pop',
 } as const;
 
-const APREFIXS = ['rm', 'un', 'sed'] as const;
-
+const ACT_SEQ_ARR = [
+  'append',
+  'prepend',
+  'unshift',
+  'push',
+  'shift',
+  'pop',
+] as const;
+const PREFIXES = ['rm', 'un', 'sed', ...ACT_SEQ_ARR] as const;
+const PREFIXES_RE = new RegExp(`;(${PREFIXES.join('|')})`, 'g');
 
 // -----------------------------------------------------------------------------
 // @id::types
 // -----------------------------------------------------------------------------
-export type CommentFormat = {
+export type Options = {
   single: [start: RegExp | string, end?: null | RegExp | string];
   multi: [start: RegExp | string, end: RegExp | string];
   /* disable white-space logic when removing/uncommenting (default: true) */
@@ -29,16 +43,18 @@ export type CommentFormat = {
 
 export type FlagStruc = Record<string, boolean | number | string>;
 
-export type AKeys = typeof AKEYS;
+export type ActMap = typeof ACT_MAP;
 
-export type ActionRemoveLines = { type: AKeys['rmLine']; count: number; };
+export type ActsSeq = typeof ACT_SEQ_ARR[number];
 
-export type ActionRemoveComment = { type: AKeys['rmCom']; count: number; };
+export type ActionRemoveLines = { type: ActMap['rml']; count: number; };
 
-export type ActionUnComment = { type: AKeys['unCom']; count: number; };
+export type ActionRemoveComment = { type: ActMap['rmc']; count: number; };
+
+export type ActionUnComment = { type: ActMap['unc']; count: number; };
 
 export type ActionSedReplace = {
-  type: AKeys['sed'];
+  type: ActMap['sed'];
   pattern: string;
   replacement: string;
   flags: string[];
@@ -134,23 +150,23 @@ let DIRECTIVE_RECAHCE: [CommentFormat | null, ReDirective | null] = [null, null]
 /**
  * create the regex directive pattern to match against
  * @cached - saves us the trouble of re-initing & passing around a complex regex object
- * @param  {CommentFormat} commentFormat
+ * @param  {CommentFormat} options
  * @return {ReDirective}
  */
-const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
-  const directiveRegex = DIRECTIVE_RECAHCE[0] === commentFormat && DIRECTIVE_RECAHCE[1]
+const createDirectiveRegex = (options: CommentFormat): ReDirective => {
+  const directiveRegex = DIRECTIVE_RECAHCE[0] === options && DIRECTIVE_RECAHCE[1]
     ? DIRECTIVE_RECAHCE[1]
     : null;
   if (directiveRegex) { return directiveRegex; }
-  const [singleStart, singleEnd] = commentFormat.single;
-  const escape = commentFormat.escape;
+  const [singleStart, singleEnd] = options.single;
+  const escape = options.escape;
 
   const reDir: ReDirective = {
     dir: /$/, // so ts won't complain
     scar: toRegex(singleStart, escape), // single start
     scdr: singleEnd ? toRegex(singleEnd, escape) : null, // single end
-    mcar: toRegex(commentFormat.multi[0], escape), // multi start
-    mcdr: toRegex(commentFormat.multi[1], escape), // multi end
+    mcar: toRegex(options.multi[0], escape), // multi start
+    mcdr: toRegex(options.multi[1], escape), // multi end
   };
 
   if (singleStart instanceof RegExp) {
@@ -160,11 +176,11 @@ const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
         ? singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '')
         : toEscapedPattern(singleEnd, escape);
       reDir.dir = new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+?)\\s*${endPattern}\\s*$`);
-      DIRECTIVE_RECAHCE = [commentFormat, reDir];
+      DIRECTIVE_RECAHCE = [options, reDir];
       return reDir;
     }
     reDir.dir = new RegExp(`^\\s*${startPattern}\\s*##+\\[IF\\]\\s*(.+)$`);
-    DIRECTIVE_RECAHCE = [commentFormat, reDir];
+    DIRECTIVE_RECAHCE = [options, reDir];
     return reDir;
   }
 
@@ -174,11 +190,11 @@ const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
       ? toEscapedPattern(singleEnd, escape)
       : singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
     reDir.dir = new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+?)\\s*${escapedEnd}\\s*$`);
-    DIRECTIVE_RECAHCE = [commentFormat, reDir];
+    DIRECTIVE_RECAHCE = [options, reDir];
     return reDir;
   }
   reDir.dir = new RegExp(`^\\s*${escapedStart}\\s*##+\\[IF\\]\\s*(.+)$`);
-  DIRECTIVE_RECAHCE = [commentFormat, reDir];
+  DIRECTIVE_RECAHCE = [options, reDir];
   return reDir;
 };
 
@@ -190,10 +206,10 @@ const createDirectiveRegex = (commentFormat: CommentFormat): ReDirective => {
 /**
  * action directive  parser
  * @param  {string} spec
- * @param  {CommentFormat} commentFormat
+ * @param  {CommentFormat} options
  * @return {Actions | null}
  */
-const parseAction = (spec: string, commentFormat: CommentFormat): Actions | null => {
+const parseAction = (spec: string, options: CommentFormat): Actions | null => {
   let split: null | [string, string] = null;
   for (const item of APREFIXS) {
     const iact = `${item}=`;
@@ -228,9 +244,9 @@ const parseAction = (spec: string, commentFormat: CommentFormat): Actions | null
 
   // match sed pattern like /pattern/replacement/[flags][lineCount]
   if (act === 'sed') {
-    const delimiter = commentFormat?.delimiter ?? '/';
+    const delimiter = options?.delimiter ?? '/';
     // create regex pattern using the custom delimiter
-    const escapedDelimiter = toEscapedPattern(delimiter, commentFormat.escape);
+    const escapedDelimiter = toEscapedPattern(delimiter, options.escape);
     const reEnd = `([gimuys]*)(@(?<stop>(.*)))?(?<lines>\\d*L)?$`;
     // eslint-disable-next-line @stylistic/function-paren-newline
     const sedRegex = new RegExp(
@@ -265,13 +281,13 @@ const parseAction = (spec: string, commentFormat: CommentFormat): Actions | null
  * parse directive line or null
  * @param  {null | string[]} parts       - directive parts
  * @param  {string} line                 - line - used to report errors
- * @param  {CommentFormat} commentFormat - comment format
+ * @param  {CommentFormat} options - comment format
  * @return {Directive | null}
  */
 const parseDirective = (
   parts: null | string[],
   line: string,
-  commentFormat: CommentFormat,
+  options: CommentFormat,
 ): Directive | null => {
   if (!parts) { return null; }
   const [condSpec, ifTrue, ifFalse] = parts;
@@ -293,8 +309,8 @@ const parseDirective = (
   return {
     key,
     value: Number.isInteger(Number(val)) ? Number(val) : val,
-    ifTrue: parseAction(ifTrue, commentFormat),
-    ifFalse: ifFalse ? parseAction(ifFalse, commentFormat) : null,
+    ifTrue: parseAction(ifTrue, options),
+    ifFalse: ifFalse ? parseAction(ifFalse, options) : null,
   } as const;
 };
 
@@ -310,7 +326,7 @@ const parseDirective = (
  * @param  {Directive} dir               - directive to process
  * @param  {FlagStruc} flags             - flags to test directive against
  * @param  {string[]} out                - output -> mutates
- * @param  {CommentFormat} commentFormat - comment format type
+ * @param  {CommentFormat} options - comment format type
  * @return {number}                      - new index
  */
 const applyDirective = (
@@ -318,12 +334,12 @@ const applyDirective = (
   action: Actions | null,
   out: string[],
   lines: string[],
-  commentFormat: CommentFormat,
+  options: CommentFormat,
   addStack: ([idx, line]: [idx: number, line: string])=> void,
 ): number => {
   // rm the next - count lines
   if (action?.type === AKEYS.rmLine) { return i + action.count; }
-  const re = createDirectiveRegex(commentFormat);
+  const re = createDirectiveRegex(options);
 
   // if no action or action condition is not met
   if (!action) {
@@ -351,7 +367,7 @@ const applyDirective = (
     while (j < lines.length && (processedLines < count || stop)) {
       const currentLine = lines[j] ?? '';
       const nxt = currentLine.replace(
-        new RegExp(toEscapedPattern(pattern, commentFormat.escape), flags.length
+        new RegExp(toEscapedPattern(pattern, options.escape), flags.length
           ? flags.join('')
           : undefined),
         replacement,
@@ -359,7 +375,7 @@ const applyDirective = (
       out.push(nxt);
       j++;
       processedLines++;
-      if (stop && currentLine.match(new RegExp(toEscapedPattern(stop, commentFormat.escape)))) {
+      if (stop && currentLine.match(new RegExp(toEscapedPattern(stop, options.escape)))) {
         break;
       }
 
@@ -382,7 +398,7 @@ const applyDirective = (
   // since un/rm comment doesn't implment count we can simply ingore empty lines
   if (!currentLine || !currentLine.trim().length) { return j; }
   // unless explict false, adjust white space
-  const spaceAdjust = commentFormat.spaceAdjust !== false;
+  const spaceAdjust = options.spaceAdjust !== false;
 
   // check for single-line comment
   const singleStartMatch = currentLine.match(re.scar);
@@ -601,7 +617,7 @@ const applyDirective = (
  * - sed-like replace: sed=/pattern/replacement/[flags][<N>L]
  * @param  {string} tmpl                   - template to process
  * @param  {FlagStruc} flags               - directive flags
- * @param  {[CommentFormat]} commentFormat - directive comment format - default js
+ * @param  {[CommentFormat]} options - directive comment format - default js
  * @param  {string | null} [_last=null]    - internal/ used for recursive logic
  * @param  {[number, string][]} _cstack    - internal/ tracks cmt directive re-insert loc
  * @param  {number} [_iglobal=-1]          - internal/ tracks global sed 'i' line
@@ -613,7 +629,7 @@ export const commentDirective = (
   tmpl: string,
   flags: FlagStruc,
   // default js comment format
-  commentFormatP: Partial<CommentFormat> = {},
+  optionsP: Partial<CommentFormat> = {},
   _last: null | string = null,
   _cstack: [number, string][] = [],
   _iglobal = -1,
@@ -629,14 +645,14 @@ export const commentDirective = (
   }
   const lines = tmpl.split(/\r?\n/);
   const out: string[] = [];
-  const commentFormat = commentFormatP as CommentFormat;
+  const options = optionsP as CommentFormat;
   // rather than object.assign we set props to better cache createDirectiveRegex
-  if (!commentFormat.delimiter) { commentFormat.delimiter = '/'; }
-  if (!commentFormat.single) { commentFormat.single = [/^\s*\/\/\s*/, null]; }
-  if (!commentFormat.multi) { commentFormat.multi = [/\s*\/\*/, /\*\//]; }
+  if (!options.delimiter) { options.delimiter = '/'; }
+  if (!options.single) { options.single = [/^\s*\/\/\s*/, null]; }
+  if (!options.multi) { options.multi = [/\s*\/\*/, /\*\//]; }
 
-  const dkeep = commentFormat.keepDirective;
-  const directiveRegex = createDirectiveRegex(commentFormat);
+  const dkeep = options.keepDirective;
+  const directiveRegex = createDirectiveRegex(options);
 
   // split into [cond, if-true, if-false?]
   const splitDirectiveLine = (line: string): string[] | null => {
@@ -670,7 +686,7 @@ export const commentDirective = (
     // check if the prvious cmt removed lines and offset the insert idx
     const prv = _cstack[_cstack.length - 1];
     const dir = prv
-      ? parseDirective(splitDirectiveLine(prv[1]), prv[1], commentFormat)
+      ? parseDirective(splitDirectiveLine(prv[1]), prv[1], options)
       : null;
     if (dir) {
       const action = getAction(dir, flags);
@@ -689,7 +705,7 @@ export const commentDirective = (
       const line = lines[i] as string;
       const parts = splitDirectiveLine(line);
       if (!parts) { continue; }
-      const dir = parseDirective(parts, line, commentFormat);
+      const dir = parseDirective(parts, line, options);
       if (isSedDirectiveG(dir)) {
         const action = getAction(dir, flags);
         if (!action) { continue; }
@@ -701,7 +717,7 @@ export const commentDirective = (
           // post-line
           lines.slice(i + 1).join('\n').replace(
             new RegExp(
-              toEscapedPattern(action.pattern, commentFormat.escape),
+              toEscapedPattern(action.pattern, options.escape),
               action.flags.join(''),
             ),
             action.replacement,
@@ -709,7 +725,7 @@ export const commentDirective = (
         ].join('\n');
 
         if (_last === results) { continue; }
-        return commentDirective(results, flags, commentFormat, results, _cstack, i + 1, _iquitAt);
+        return commentDirective(results, flags, options, results, _cstack, i + 1, _iquitAt);
       }
     }
 
@@ -725,7 +741,7 @@ export const commentDirective = (
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? '';
     const parts = splitDirectiveLine(line);
-    const dir = parseDirective(parts, line, commentFormat);
+    const dir = parseDirective(parts, line, options);
     if (!dir) {
       out.push(line);
       continue;
@@ -751,7 +767,7 @@ export const commentDirective = (
 
     const iprv = i;
     const iout = out.length;
-    i = applyDirective(i, action, out, lines, commentFormat, addStack);
+    i = applyDirective(i, action, out, lines, options, addStack);
 
     // since rm'ing a comment doesn't always remove a line this calculates diff
     if (action?.type === AKEYS.rmCom) {
@@ -762,7 +778,7 @@ export const commentDirective = (
   const results = out.join('\n');
   // keep recur'ing till no changes -> no comment directives left that make changes
   if (_last !== results) {
-    return commentDirective(results, flags, commentFormat, results, _cstack, 0, _iquitAt);
+    return commentDirective(results, flags, options, results, _cstack, 0, _iquitAt);
   }
 
   // not keeping comments
