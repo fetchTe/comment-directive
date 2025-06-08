@@ -62,7 +62,39 @@ export type ActionSedReplace = {
   stop: null | string;
 };
 
-export type Actions = ActionRemoveLines | ActionRemoveComment | ActionUnComment | ActionSedReplace;
+// add start
+export type ActionPrepend = {
+  type: ActMap['prepend'] | ActMap['unshift'];
+  val: string;
+  count: number;
+  stop: null | string;
+};
+// remove start
+export type ActionShift = {
+  type: ActMap['shift'];
+  val: string;
+  count: number;
+  stop: null | string;
+};
+// add end
+export type ActionAppend = {
+  type: ActMap['append'] | ActMap['push'];
+  val: string;
+  count: number;
+  stop: null | string;
+};
+// remove end
+export type ActionPop = {
+  type: ActMap['pop'];
+  val: string;
+  count: number;
+  stop: null | string;
+};
+
+export type ActionSequence = ActionAppend | ActionPrepend | ActionShift | ActionPrepend | ActionPop;
+
+export type Actions = ActionRemoveLines | ActionRemoveComment | ActionUnComment
+| ActionSedReplace | ActionSequence;
 
 export type Directive<A = Actions> = {
   key: string;
@@ -97,6 +129,22 @@ const getAction = <A extends Actions>(dir: Directive<A>, flags: FlagStruc): A | 
   return conditionMet ? dir.ifTrue : dir.ifFalse;
 };
 
+
+/**
+ * type gaurd for sequence action type
+ * @param  {string} act - action type
+ * @return {act is ActsSeq}
+ */
+const isSeqActionType = (act?: string): act is ActsSeq =>
+  !!(act && ACT_SEQ_ARR.find(v => v === act));
+
+/**
+ * type gaurd for sequence action
+ * @param  {string} act - action
+ * @return {act is ActsSeq}
+ */
+const isSeqAction = (act?: Actions): act is ActionSequence =>
+  isSeqActionType(act?.type);
 
 /**
  * type gaurd for sed action
@@ -255,6 +303,28 @@ const parseAction = (spec: string, options: CommentFormat): Actions | null => {
     if (!sedMatch) {
       console.error(`[commentDirective:parseAction] bad sed syntax: ${param}`);
       return null;
+    // append/prepend/shift/pop
+    if (isSeqActionType(act)) {
+      // create regex pattern using the custom delimiter
+      const escapedDelimiter = toEscapedPattern(options?.delimiter ?? '/', options.escape);
+      const meta = `(@(?<stop>(.*)))?(?<lines>\\d*L)?$`;
+      const endRegex = new RegExp(`^(?<val>(.*?))(${escapedDelimiter}(${meta}))?$`);
+      const endMatch = param.match(endRegex);
+      const val = endMatch?.groups?.['val'] ?? null;
+      if (!val) {
+        console.error(`[commentDirective:parseAction] no ${act} 'value' match found: ${param}`);
+        return null;
+      }
+      const stop = endMatch?.groups?.['stop'] ?? null;
+      const lines = endMatch?.groups?.['lines'] ?? null;
+      const result = {
+        val,
+        type: ACT_MAP[act as ActsSeq],
+        count: count ?? (Number.isInteger(lines) ? Number(lines) : null),
+        stop,
+      };
+      cache.set(spec, result);
+      return result;
     }
     const [, pattern, replacement, flags] = sedMatch;
     if (typeof pattern !== 'string' || typeof replacement !== 'string') {
@@ -391,6 +461,44 @@ const applyDirective = (
   }
   const isUncomment = action.type === AKEYS.unCom;
   const isRmcomment = action.type === AKEYS.rmCom;
+
+  // append/prepend/shift/pop
+  if (isSeqAction(action)) {
+    const {
+      count,
+      stop,
+      val,
+    } = action;
+
+    let processedLines = 0;
+    while (j < lines.length && (processedLines < count || stop)) {
+      const currentLine = lines[j] ?? '';
+      let nxt = currentLine;
+      switch (action.type) {
+      case 'append':
+      case 'push':
+        nxt = nxt.endsWith(val) ? nxt : nxt + val;
+        break;
+      case 'prepend':
+      case 'unshift':
+        nxt = nxt.startsWith(val) ? nxt : val + nxt;
+        break;
+      case 'shift':
+        nxt = nxt.startsWith(val) ? nxt.slice(val.length) : nxt;
+        break;
+      case 'pop':
+        nxt = nxt.endsWith(val) ? nxt.slice(0, -val.length) : nxt;
+        break;
+      }
+      out.push(nxt);
+      j++;
+      processedLines++;
+      if (stop && currentLine.match(new RegExp(toEscapedPattern(stop, options.escape)))) {
+        break;
+      }
+    }
+    return j - 1;
+  }
   // return if not rm/un comment as this is a fall-through case (should never happen)
   if (!isRmcomment && !isUncomment) { return i; }
 
