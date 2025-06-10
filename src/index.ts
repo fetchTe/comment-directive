@@ -47,6 +47,10 @@ export type CommentOptions = {
   delimiter?: string;
   /* escape sed (default: true) */
   escape?: false;
+  /* the acutal comment directive identifier (default: '###[IF]') */
+  identifier?: string;
+type CommentOptionsR = {
+  [K in keyof CommentOptions]-?: CommentOptions[K];
 };
 
 export type FlagStruc = Record<string, boolean | number | string>;
@@ -204,14 +208,14 @@ const toRegex = (pattern: RegExp | string, regexEscape = true): RegExp =>
 /**
  * create the regex directive pattern to match against
  * @cached - saves us the trouble of re-initing & passing around a complex regex object
- * @param  {CommentOptions} options
+ * @param  {CommentOptionsR} options
  * @return {ReDirective}
  */
 export const createDirectiveRegex = /* @__PURE__ */ (() => {
   // strict equality cache based on options - option Map/WeakMap not worth overhead
   let cache: ReDirective | null = null;
-  let lastOptions: CommentOptions | null = null;
-  return (options: CommentOptions): ReDirective => {
+  let lastOptions: CommentOptionsR | null = null;
+  return (options: CommentOptionsR): ReDirective => {
     // clear cache if options changed
     if (lastOptions !== options) {
       cache = null;
@@ -228,14 +232,15 @@ export const createDirectiveRegex = /* @__PURE__ */ (() => {
       ? toEscapedPattern(singleEnd, escape)
       : singleEnd?.source;
 
+    const id = toEscapedPattern(options.identifier);
     cache = {
       scar: toRegex(singleStart, escape), // single start
       scdr: singleEnd ? toRegex(singleEnd, escape) : null, // single end
       mcar: toRegex(options.multi[0], escape), // multi start
       mcdr: toRegex(options.multi[1], escape), // multi end
       dir: !end
-        ? new RegExp(`${start}\\s*###\\[IF\\](.+)$`)
-        : new RegExp(`${start}\\s*###\\[IF\\](.+?)\\s*?${end}\\s*?$`),
+        ? new RegExp(`${start}\\s*${id}(.+)$`)
+        : new RegExp(`${start}\\s*${id}(.+?)\\s*?${end}\\s*?$`),
     };
     return cache;
   };
@@ -266,14 +271,14 @@ export const parseLineCount = (param: string, def = 1): {count: number; param: s
 /**
  * action directive  parser
  * @param  {string} spec
- * @param  {CommentOptions} options
+ * @param  {CommentOptionsR} options
  * @return {Actions | null}
  */
 export const parseAction = /* @__PURE__ */ (() => {
   // strict equality cache based on options - option Map/WeakMap not worth overhead
   const cache = new Map<string, Actions | null>();
-  let lastOptions: CommentOptions | null = null;
-  return (spec: string, options: CommentOptions): Actions | null => {
+  let lastOptions: CommentOptionsR | null = null;
+  return (spec: string, options: CommentOptionsR): Actions | null => {
     // clear cache if options changed
     if (lastOptions !== options) {
       cache.clear();
@@ -432,13 +437,13 @@ export const parseAction = /* @__PURE__ */ (() => {
  * parse directive line or null
  * @param  {null | string[]} parts       - directive parts
  * @param  {string} line                 - line - used to report errors
- * @param  {CommentOptions} options - comment format
+ * @param  {CommentOptionsR} options - comment format
  * @return {Directive | null}
  */
 const parseDirective = (
   parts: null | string[],
   line: string,
-  options: CommentOptions,
+  options: CommentOptionsR,
 ): Directive | null => {
   if (!parts) { return null; }
   const [condSpec, ifTrue, ifFalse] = parts;
@@ -477,7 +482,7 @@ const parseDirective = (
  * @param  {Directive} dir               - directive to process
  * @param  {FlagStruc} flags             - flags to test directive against
  * @param  {string[]} out                - output -> mutates
- * @param  {CommentOptions} options - comment format type
+ * @param  {CommentOptionsR} options - comment format type
  * @return {number}                      - new index
  */
 const applyDirective = (
@@ -485,7 +490,7 @@ const applyDirective = (
   action: Actions | null,
   out: string[],
   lines: string[],
-  options: CommentOptions,
+  options: CommentOptionsR,
   addStack: ([idx, line]: [idx: number, line: string])=> void,
 ): number => {
   // rm the next - count lines
@@ -824,12 +829,17 @@ export const commentDirective = (
   // default js comment format
   if (!options.single) { options.single = DEFAULT_OPTIONS.single; }
   if (!options.multi) { options.multi = DEFAULT_OPTIONS.multi; }
+  // directive identifier
+  const identifier = options?.identifier ?? DEFAULT_OPTIONS.identifier;
+  if (!options.identifier) { options.identifier = identifier; }
+
+  const dkeep = options?.keepDirective; // keep directives
   const reDirective = createDirectiveRegex(options).dir;
 
   // split into [cond, if-true, if-false?]
   const splitDirectiveLine = (line: string): string[] | null => {
     // much faster to do a indexOf check initially (caching this fn isn't really worth it)
-    if (line.indexOf('###[IF]') === -1) { return null; }
+    if (line.indexOf(identifier) === -1) { return null; }
     // only cache lines with comment directive
     let match = reDirective.exec(line)?.[1];
     if (!match) { return null; }
