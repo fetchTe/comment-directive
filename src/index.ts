@@ -25,6 +25,13 @@ const ACT_SEQ_ARR = [
 const PREFIXES = ['rm', 'un', 'sed', ...ACT_SEQ_ARR] as const;
 const PREFIXES_RE = new RegExp(`;(${PREFIXES.join('|')})`, 'g');
 
+// default c-like comment format (js/rust/c)
+const DEFAULT_OPTIONS: CommentOptions & {delimiter: string} = {
+  delimiter: '/',
+  single: [/^\s*\/\/\s*/, null],
+  multi: [/\s*\/\*/, /\*\//],
+};
+
 // -----------------------------------------------------------------------------
 // @id::types
 // -----------------------------------------------------------------------------
@@ -748,37 +755,29 @@ const applyDirective = (
 export const commentDirective = (
   tmpl: string,
   flags: FlagStruc,
-  _last: null | string = null,
-  _cstack: [number, string][] = [],
-  _iglobal = 0,
-  _iquitAt = 0,
   optionsP: Partial<CommentOptions> | null = null,
 ): string => {
-  // if we hit 10,000 loop (should never happen, but could if bad user sed directive) we bail
-  ++_iquitAt;
-  if (_iquitAt > 1e4) {
-    throw new Error([
-      `[commentDirective] 10,000-loop limit was hit, either a recursive loop or`,
-      `an absurd use-case; instead of going to infinity and beyond, bailing...`,
-    ].join(' '));
-  }
-  const lines = tmpl.split(/\r?\n/);
+  const cstack: [number, string][] = [];
   const out: string[] = [];
-  const options = optionsP as Options;
-  // rather than object.assign we set props to better cache createDirectiveRegex
-  if (!options.delimiter) { options.delimiter = '/'; }
-  // default js comment format
-  if (!options.single) { options.single = [/^\s*\/\/\s*/, null]; }
-  if (!options.multi) { options.multi = [/\s*\/\*/, /\*\//]; }
+  let tmplLast: string | null = null;
+  let tmplCur = tmpl;
+  let iquitAt = 0;
+  let doffset = 0; // directive offset
+  const dkeep = optionsP?.keepDirective; // keep directives
 
-  const dkeep = options.keepDirective;
-  const directiveRegex = createDirectiveRegex(options);
+  // rather than object.assign we set props to better cache createDirectiveRegex
+  const options = (optionsP ?? DEFAULT_OPTIONS) as CommentOptions;
+  if (!options.delimiter) { options.delimiter = DEFAULT_OPTIONS.delimiter; }
+  // default js comment format
+  if (!options.single) { options.single = DEFAULT_OPTIONS.single; }
+  if (!options.multi) { options.multi = DEFAULT_OPTIONS.multi; }
+  const reDirective = createDirectiveRegex(options).dir;
 
   // split into [cond, if-true, if-false?]
   const splitDirectiveLine = (line: string): string[] | null => {
     // much faster to do a indexOf check initially
     if (line.indexOf('###[IF]') === -1) { return null; }
-    let match = directiveRegex.dir.exec(line)?.[1];
+    let match = reDirective.exec(line)?.[1];
     if (!match) { return null; }
     PREFIXES_RE.lastIndex = 0; // reset regex
     // rm trailing ;
@@ -799,122 +798,131 @@ export const commentDirective = (
     return result.map(v => (v[0] === ';' ? v.slice(1) : v));
   };
 
-  // determines line offset, required for position if/when lines are removed (a recursive headache)
-  let offsetStack = 0;
+  // determines line offset, required for position if/when lines are removed (a headache)
   const addStack = ([idx, line]: [idx: number, line: string]) => {
     // if not keeping comments we can ignore all stack/logic
     if (!dkeep) { return; }
     // check if the prvious cmt removed lines and offset the insert idx
-    const prv = _cstack[_cstack.length - 1];
-    const dir = prv
-      ? parseDirective(splitDirectiveLine(prv[1]), prv[1], options)
+    const prv = cstack[cstack.length - 1];
+    const action = prv
+      ? getAction(parseDirective(splitDirectiveLine(prv[1]), prv[1], options), flags)
       : null;
-    if (dir) {
-      const action = getAction(dir, flags);
-      if (action?.type === ACT_MAP.rml) {
-        offsetStack = offsetStack + action.count;
-      }
-    }
+    if (action?.type === ACT_MAP.rml) { doffset = doffset + action.count; }
     // ensure we never push a line idx lower than last; as this can/is called recursivly
-    idx = idx - offsetStack;
-    idx >= (prv?.[0] ?? 0) && _cstack.push([idx, line]);
+    idx = idx - doffset;
+    idx >= (prv?.[0] ?? 0) && cstack.push([idx, line]);
   };
 
-  // global sed loop(s)
-  for (let i = _iglobal; i < lines.length; i++) {
-    const line = lines[i] as string;
-    const parts = splitDirectiveLine(line);
-    if (!parts) { continue; }
-    const dir = parseDirective(parts, line, options);
-    if (!isSedDirectiveG(dir)) { continue; }
-    const action = getAction(dir, flags);
-    if (!action) { continue; }
-    let targ = lines.slice(i + 1);
-    // limit to N lines
-    const post: string[] = action.count ? targ.slice(action.count) : [];
-    targ = action.count ? targ.slice(0, action.count) : targ;
-    const results = [
-      lines.slice(0, i).join('\n'), // pre-line
-      line,
-      // post-line
-      targ.join('\n').replace(
+  // while & break iterative loop
+  while (true) {
+    // 10000 loop limit - could happen with a bad user sed directive
+    // eslint-disable-next-line @stylistic/max-len
+    if (iquitAt > 1e4) { throw new Error(`[commentDirective] 10,000-loop limit was hit, either a recursive loop or an absurd use-case; instead of going to infinity and beyond, bailing...`); }
+    iquitAt++;
+
+    // keep loop'ing till stable -> no comment directives left that make changes
+    if (tmplCur === tmplLast) { break; }
+    tmplLast = tmplCur;
+
+    const lines: string[] = tmplCur.split(/\r?\n/);
+    let passChanged = false;
+
+    // global sed loop(s)
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i] as string;
+      const parts = splitDirectiveLine(line);
+      if (!parts) { continue; }
+      const dir = parseDirective(parts, line, options);
+      if (!isSedDirectiveG(dir)) { continue; }
+      const action = getAction(dir, flags);
+      if (!action) { continue; }
+      const pre = lines.slice(0, i).join('\n');
+      let target = lines.slice(i + 1);
+      // if limit to N lines
+      const post: string[] = action.count ? target.slice(action.count) : [];
+      target = action.count ? target.slice(0, action.count) : target;
+
+      const replaced = target.join('\n').replace(
         new RegExp(
           toEscapedPattern(action.pattern, options.escape),
           action.flags.join(''),
         ),
         action.replacement,
-      ),
-    ].concat(post).join('\n');
-    if (_last === results) { continue; }
-    return commentDirective(results, flags, options, results, _cstack, i + 1, _iquitAt);
+      );
+
+      // if diff exit for-loop & restart the main while loop
+      const results = [pre, line, replaced].concat(post).join('\n');
+      if (tmplLast !== results) {
+        tmplCur = results;
+        passChanged = true;
+        break;
+      }
+    }
+
+    // if global sed was applied, restart the main loop
+    if (passChanged) { continue; }
+    // reset as new loop
+    out.length = 0;
+    doffset = 0;
+
+    // non-global sed main/loop
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i] ?? '';
+      const parts = splitDirectiveLine(line);
+      const dir = parseDirective(parts, line, options);
+      if (!dir) {
+        out.push(line);
+        continue;
+      }
+
+      // skip sed global; only happen if keeping directive
+      if (isSedDirectiveG(dir)) {
+        dkeep && out.push(line);
+        continue;
+      }
+      const action = getAction(dir, flags);
+
+      let iadd = i;
+      dkeep && addStack([iadd, line]);
+      // this while loop handles 'stacked' comment directives by pushing them
+      // back into 'out' evaluate next time around, again, and again
+      while (reDirective.test(lines[i + 1] ?? '')) {
+        out.push(lines[i + 1] ?? '');
+        ++iadd;
+        dkeep && addStack([i + 1, lines[i + 1] ?? '']);
+        ++i;
+      }
+
+      const iprv = i;
+      const iout = out.length;
+      // @todo: remove this mutation/pass-around-logic
+      i = applyDirective(i, action, out, lines, options, addStack);
+      // since rm'ing a comment doesn't always remove a line this calculates diff
+      if (action?.type === ACT_MAP.rmc) {
+        doffset = doffset + ((i - iprv) - (out.length - iout));
+      }
+    }
+
+    tmplCur = out.join('\n');
   }
-  _iglobal = lines.length;
 
-
-  // non-global sed loop(s)
-  // @todo: remove this mutation/pass-around-logic
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? '';
-    const parts = splitDirectiveLine(line);
-    const dir = parseDirective(parts, line, options);
-    if (!dir) {
-      out.push(line);
-      continue;
-    }
-
-    // skip sed global (should only happen if keeping directive)
-    if (isSedDirectiveG(dir)) {
-      dkeep && out.push(line);
-      continue;
-    }
-    const action = getAction(dir, flags);
-
-    let iadd = i;
-    dkeep && addStack([iadd, line]);
-    // this while loop handles 'stacked' comment directives by pusing them
-    // back into 'out', to recursively evaluate, next time around, again, and again
-    while (directiveRegex.dir.test(lines[i + 1] ?? '')) {
-      out.push(lines[i + 1] ?? '');
-      ++iadd;
-      dkeep && addStack([i + 1, lines[i + 1] ?? '']);
-      ++i;
-    }
-
-    const iprv = i;
-    const iout = out.length;
-    i = applyDirective(i, action, out, lines, options, addStack);
-
-    // since rm'ing a comment doesn't always remove a line this calculates diff
-    if (action?.type === ACT_MAP.rmc) {
-      offsetStack = offsetStack + ((i - iprv) - (out.length - iout));
-    }
-  }
-
-  const results = out.join('\n');
-  // keep recur'ing till no changes -> no comment directives left that make changes
-  if (_last !== results) {
-    return commentDirective(results, flags, options, results, _cstack, 0, _iquitAt);
-  }
-
-  // not keeping comments
-  if (!dkeep) { return results; }
-
-  // re-insert comments
+  // rtn or re-insert comments
+  if (!dkeep) { return tmplCur; }
+  const finalLines = tmplCur.split(/\r?\n/);
   const cout: string[] = [];
-  // remove duplicates
-  _cstack = Array.from(new Set(_cstack.map(v => JSON.stringify(v))))
-    .map(v => JSON.parse(v)) as [number, string][];
-
-  for (const item of out) {
-    while (_cstack?.[0]?.[0] === cout.length) {
-      const insert = _cstack.shift();
+  for (const item of finalLines) {
+    while (cstack?.[0]?.[0] === cout.length) {
+      const insert = cstack.shift();
       insert && cout.push(insert[1]);
     }
     cout.push(item ?? '');
   }
-  // last line
-  const insert = _cstack.shift();
-  insert && cout.push(insert[1]);
+  // last lines
+  while (cstack.length > 0) {
+    const insert = cstack.shift();
+    insert && cout.push(insert[1]);
+  }
+
   return cout.join('\n');
 };
 
