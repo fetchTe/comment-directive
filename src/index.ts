@@ -26,8 +26,13 @@ const ACT_PREFIXS = (['rm', 'un', 'sed', ...ACT_SEQ_ARR] as const)
   .map(p => `${p}=` as const);
 
 // default c-like comment format (js/rust/c)
-const DEFAULT_OPTIONS: CommentOptions & {delimiter: string} = {
+const DEFAULT_OPTIONS: CommentOptionsR = {
   delimiter: '/',
+  keepDirective: false,
+  spaceAdjust: true,
+  keepEmptyLines: false,
+  escape: true,
+  identifier: '###[IF]',
   single: [/^\s*\/\/\s*/, null],
   // eating the space before the comment makes it easier to work with inline-comments
   multi: [/\s*\/\*/, /\*\//],
@@ -40,15 +45,19 @@ export type CommentOptions = {
   single: [start: RegExp | string, end?: null | RegExp | string];
   multi: [start: RegExp | string, end: RegExp | string];
   /* disable white-space logic when removing/uncommenting (default: true) */
-  spaceAdjust?: false;
+  spaceAdjust?: boolean;
   /* keep directive comments in the output (default: false) */
-  keepDirective?: true;
+  keepDirective?: boolean;
   /* change sed delimiter (default: '/') */
   delimiter?: string;
+  /* preserve empty removed comment/lines/directive lines (default: false) */
+  keepEmptyLines?: boolean;
   /* escape sed (default: true) */
-  escape?: false;
+  escape?: boolean;
   /* the acutal comment directive identifier (default: '###[IF]') */
   identifier?: string;
+};
+
 type CommentOptionsR = {
   [K in keyof CommentOptions]-?: CommentOptions[K];
 };
@@ -493,8 +502,13 @@ const applyDirective = (
   options: CommentOptionsR,
   addStack: ([idx, line]: [idx: number, line: string])=> void,
 ): number => {
+  const ekeep = options?.keepEmptyLines;
+  const dkeep = options?.keepDirective;
   // rm the next - count lines
-  if (action?.type === ACT_MAP.rml) { return i + action.count; }
+  if (action?.type === ACT_MAP.rml) {
+    ekeep && Array(action.count + (dkeep ? 0 : 1)).fill('').forEach(v => out.push(v));
+    return i + action.count;
+  }
   // regex/match helpers
   const re = createDirectiveRegex(options);
 
@@ -588,9 +602,12 @@ const applyDirective = (
 
   let currentLine = lines[j];
   // since un/rm comment doesn't implment count we can simply ingore empty lines
-  if (!currentLine || !currentLine.trim().length) { return j; }
+  if (!currentLine || !currentLine.trim().length) {
+    ekeep && out.push(currentLine ?? '');
+    return j;
+  }
   // unless explict false, adjust white space
-  const spaceAdjust = options.spaceAdjust !== false;
+  const spaceAdjust = !ekeep && options.spaceAdjust !== false;
   // rm/trim end space(s)
   const spaceTrim = (val: string) => (spaceAdjust ? val.replace(/\s+$/, '') : val);
 
@@ -628,7 +645,7 @@ const applyDirective = (
           return j;
         }
         const resultLine = `${beforeComment}${afterComment}`;
-        resultLine.trim().length > 0 && out.push(resultLine);
+        (ekeep || resultLine.trim().length > 0) && out.push(resultLine);
         return j;
       }
     }
@@ -641,7 +658,8 @@ const applyDirective = (
         out.push(spaceTrim(`${beforeComment}${commentContent}`));
         return j;
       }
-      beforeComment.trim().length > 0 && out.push(beforeComment);
+      (ekeep || beforeComment.trim().length > 0)
+        && out.push(beforeComment + (ekeep && !dkeep ? '\n' : ''));
       return j;
     }
   }
@@ -690,9 +708,11 @@ const applyDirective = (
 
     // remove comment: comment + content -> keeping the rest of the line
     const resultLine = `${beforeComment}${afterComment}`;
-    resultLine.trim().length > 0 && out.push(resultLine);
+    (ekeep || resultLine.trim().length > 0)
+      && out.push(resultLine + (ekeep && !dkeep ? '\n' : ''));
     return j;
   }
+
   // multi-line comment
   const commentLines: string[] = [];
   let inComment = false;
@@ -703,16 +723,14 @@ const applyDirective = (
   let commentEndLength = 3; // default fallback
   let commentEndDiff = 0; // for whitespace adj
   while (j < lines.length) {
-    currentLine = lines[j];
-    if (!currentLine) { j++; continue; }
-
+    currentLine = lines[j] ?? '';
     const mcar = currentLine.search(re.mcar);
     if (!inComment && mcar !== -1) {
       inComment = true;
       beforeComment = currentLine.slice(0, mcar);
       const commentStartMatch = currentLine.slice(mcar).match(re.mcar);
       commentStartLength = commentStartMatch ? commentStartMatch[0].length : 3;
-      commentStartDiff = commentStartMatch
+      commentStartDiff = commentStartMatch && spaceAdjust
         ? commentStartMatch[0].length - commentStartMatch[0].trimStart().length
         : 0;
       const afterStart = currentLine.slice(mcar + commentStartLength);
@@ -734,7 +752,7 @@ const applyDirective = (
       if (mcdr !== -1) {
         const commentEndMatch = currentLine.slice(mcdr).match(re.mcdr);
         commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
-        commentEndDiff = commentEndMatch
+        commentEndDiff = commentEndMatch && spaceAdjust
           ? commentEndMatch[0].length - commentEndMatch[0].trimEnd().length
           : 0;
         commentLines.push(currentLine.slice(mcar + commentStartLength, mcdr));
@@ -781,14 +799,16 @@ const applyDirective = (
       out.push(spaceTrim(resultLine));
       return j - 1;
     }
+
     // remove comment: in comment
-    const resultLine = `${beforeComment}${afterComment}`;
-    resultLine.trim().length > 0 && out.push(resultLine);
+    const resultLine = `${beforeComment}${afterComment}`
+      + (ekeep ? '\n'.repeat(commentLines.length - (dkeep ? 1 : 0)) : '');
+    (ekeep || resultLine.trim().length > 0) && out.push(resultLine);
     return j - 1;
   } else if (currentLine && re.scar.test(currentLine)) {
     // remove comment: only if in comment of next line is single-line comment
     const resultLine = `${beforeComment}${afterComment}`;
-    resultLine.trim().length > 0 && out.push(resultLine);
+    (ekeep || resultLine.trim().length > 0) && out.push(resultLine);
     return j - 1;
   }
 
@@ -821,10 +841,9 @@ export const commentDirective = (
   let tmplCur = tmpl;
   let iquitAt = 0;
   let doffset = 0; // directive offset
-  const dkeep = optionsP?.keepDirective; // keep directives
 
-  // rather than object.assign we set props to better cache createDirectiveRegex
-  const options = (optionsP ?? DEFAULT_OPTIONS) as CommentOptions;
+  const options = (optionsP ?? DEFAULT_OPTIONS) as CommentOptionsR;
+  // set props to better cache createDirectiveRegex rather than object.assign
   if (!options.delimiter) { options.delimiter = DEFAULT_OPTIONS.delimiter; }
   // default js comment format
   if (!options.single) { options.single = DEFAULT_OPTIONS.single; }
@@ -873,7 +892,7 @@ export const commentDirective = (
     if (!dkeep) { return; }
     // check if the prvious cmt removed lines and offset the insert idx
     const prv = cstack[cstack.length - 1];
-    const action = prv
+    const action = !options.keepEmptyLines && prv
       ? getAction(parseDirective(splitDirectiveLine(prv[1]), prv[1], options), flags)
       : null;
     if (action?.type === ACT_MAP.rml) { doffset = doffset + action.count; }
@@ -973,7 +992,7 @@ export const commentDirective = (
       i = applyDirective(i, action, out, lines, options, addStack);
       // since rm'ing a comment doesn't always remove a line this calculates diff
       if (action?.type === ACT_MAP.rmc) {
-        doffset = doffset + ((i - iprv) - (out.length - iout));
+        doffset = (doffset + ((i - iprv) - (out.length - iout)));
       }
     }
 
@@ -1001,3 +1020,4 @@ export const commentDirective = (
 };
 
 export default commentDirective;
+
