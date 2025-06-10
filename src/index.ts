@@ -28,7 +28,7 @@ const PREFIXES_RE = new RegExp(`;(${PREFIXES.join('|')})`, 'g');
 // -----------------------------------------------------------------------------
 // @id::types
 // -----------------------------------------------------------------------------
-export type Options = {
+export type CommentOptions = {
   single: [start: RegExp | string, end?: null | RegExp | string];
   multi: [start: RegExp | string, end: RegExp | string];
   /* disable white-space logic when removing/uncommenting (default: true) */
@@ -196,14 +196,14 @@ const toRegex = (pattern: RegExp | string, regexEscape = true): RegExp =>
 /**
  * create the regex directive pattern to match against
  * @cached - saves us the trouble of re-initing & passing around a complex regex object
- * @param  {Options} options
+ * @param  {CommentOptions} options
  * @return {ReDirective}
  */
 export const createDirectiveRegex = /* @__PURE__ */ (() => {
   // strict equality cache based on options - option Map/WeakMap not worth overhead
   let cache: ReDirective | null = null;
-  let lastOptions: Options | null = null;
-  return (options: Options): ReDirective => {
+  let lastOptions: CommentOptions | null = null;
+  return (options: CommentOptions): ReDirective => {
     // clear cache if options changed
     if (lastOptions !== options) {
       cache = null;
@@ -257,14 +257,14 @@ export const createDirectiveRegex = /* @__PURE__ */ (() => {
 /**
  * action directive  parser
  * @param  {string} spec
- * @param  {Options} options
+ * @param  {CommentOptions} options
  * @return {Actions | null}
  */
 export const parseAction = /* @__PURE__ */ (() => {
   // strict equality cache based on options - option Map/WeakMap not worth overhead
   const cache = new Map<string, Actions | null>();
-  let lastOptions: Options | null = null;
-  return (spec: string, options: Options): Actions | null => {
+  let lastOptions: CommentOptions | null = null;
+  return (spec: string, options: CommentOptions): Actions | null => {
     // clear cache if options changed
     if (lastOptions !== options) {
       cache.clear();
@@ -382,13 +382,13 @@ export const parseAction = /* @__PURE__ */ (() => {
  * parse directive line or null
  * @param  {null | string[]} parts       - directive parts
  * @param  {string} line                 - line - used to report errors
- * @param  {Options} options - comment format
+ * @param  {CommentOptions} options - comment format
  * @return {Directive | null}
  */
 const parseDirective = (
   parts: null | string[],
   line: string,
-  options: Options,
+  options: CommentOptions,
 ): Directive | null => {
   if (!parts) { return null; }
   const [condSpec, ifTrue, ifFalse] = parts;
@@ -427,7 +427,7 @@ const parseDirective = (
  * @param  {Directive} dir               - directive to process
  * @param  {FlagStruc} flags             - flags to test directive against
  * @param  {string[]} out                - output -> mutates
- * @param  {Options} options - comment format type
+ * @param  {CommentOptions} options - comment format type
  * @return {number}                      - new index
  */
 const applyDirective = (
@@ -435,7 +435,7 @@ const applyDirective = (
   action: Actions | null,
   out: string[],
   lines: string[],
-  options: Options,
+  options: CommentOptions,
   addStack: ([idx, line]: [idx: number, line: string])=> void,
 ): number => {
   // rm the next - count lines
@@ -758,21 +758,17 @@ const applyDirective = (
  * - sed-like replace: sed=/pattern/replacement/[flags][<N>L]
  * @param  {string} tmpl                   - template to process
  * @param  {FlagStruc} flags               - directive flags
- * @param  {[Options]} options - directive comment format - default js
- * @param  {string | null} [_last=null]    - internal/ used for recursive logic
- * @param  {[number, string][]} _cstack    - internal/ tracks cmt directive re-insert loc
- * @param  {number} [_iglobal=-1]          - internal/ tracks global sed 'i' line
- * @param  {number} [_iquitAt=0]           - internal/ prevents infinity loop
+ * @param  {[CommentOptions]} options - directive comment format - default js
  * @return {string}
  */
 export const commentDirective = (
   tmpl: string,
   flags: FlagStruc,
-  optionsP: Partial<Options> = {},
   _last: null | string = null,
   _cstack: [number, string][] = [],
   _iglobal = 0,
   _iquitAt = 0,
+  optionsP: Partial<CommentOptions> | null = null,
 ): string => {
   // if we hit 10,000 loop (should never happen, but could if bad user sed directive) we bail
   ++_iquitAt;
