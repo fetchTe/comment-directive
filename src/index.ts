@@ -213,38 +213,22 @@ export const createDirectiveRegex = /* @__PURE__ */ (() => {
     if (cache) { return cache; }
     const [singleStart, singleEnd] = options.single;
     const escape = options.escape;
+    const start = typeof singleStart === 'string'
+      ? toEscapedPattern(singleStart, escape)
+      : singleStart?.source;
+    const end = typeof singleEnd === 'string'
+      ? toEscapedPattern(singleEnd, escape)
+      : singleEnd?.source;
 
     cache = {
-      dir: /$/, // so ts won't complain
       scar: toRegex(singleStart, escape), // single start
       scdr: singleEnd ? toRegex(singleEnd, escape) : null, // single end
       mcar: toRegex(options.multi[0], escape), // multi start
       mcdr: toRegex(options.multi[1], escape), // multi end
+      dir: !end
+        ? new RegExp(`${start}\\s*###\\[IF\\](.+)$`)
+        : new RegExp(`${start}\\s*###\\[IF\\](.+?)\\s*?${end}\\s*?$`),
     };
-
-    if (singleStart instanceof RegExp) {
-      const startPattern = singleStart.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
-      if (!singleEnd) {
-        cache.dir = new RegExp(`^\\s*${startPattern}\\s*###\\[IF\\](.+)$`);
-        return cache;
-      }
-      const endPattern = singleEnd instanceof RegExp
-        ? singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '')
-        : toEscapedPattern(singleEnd, escape);
-      // eslint-disable-next-line @stylistic/max-len
-      cache.dir = new RegExp(`^\\s*${startPattern}\\s*###\\[IF\\](.+?)\\s*${endPattern}\\s*$`);
-      return cache;
-    }
-
-    const escapedStart = toEscapedPattern(singleStart, escape);
-    if (!singleEnd) {
-      cache.dir = new RegExp(`^\\s*${escapedStart}\\s*###\\[IF\\](.+)$`);
-      return cache;
-    }
-    const escapedEnd = typeof singleEnd === 'string'
-      ? toEscapedPattern(singleEnd, escape)
-      : singleEnd.source.replace(/^\^\\s\*/, '').replace(/\\s\*\$$/, '');
-    cache.dir = new RegExp(`^\\s*${escapedStart}\\s*###\\[IF\\](.+?)\\s*${escapedEnd}\\s*$`);
     return cache;
   };
 })();
@@ -393,12 +377,12 @@ const parseDirective = (
   if (!parts) { return null; }
   const [condSpec, ifTrue, ifFalse] = parts;
   // condSpec is like "alt=1"
-  const condMatch = condSpec?.match(/^([^=]+)=(.+)$/);
+  const condMatch = condSpec?.split('=');
   if (!condMatch) {
     console.error(`[commentDirective:parseDirective] no/bad condition match: ${line}`);
     return null;
   }
-  const [_match, key, val] = condMatch;
+  const [key, val] = condMatch;
   if (!key || val === undefined) {
     console.error(`[commentDirective:parseDirective] bad condition key/value`, {key, val});
     return null;
