@@ -22,13 +22,14 @@ const ACT_SEQ_ARR = [
   'shift',
   'pop',
 ] as const;
-const PREFIXES = ['rm', 'un', 'sed', ...ACT_SEQ_ARR] as const;
-const PREFIXES_RE = new RegExp(`;(${PREFIXES.join('|')})`, 'g');
+const ACT_PREFIXS = (['rm', 'un', 'sed', ...ACT_SEQ_ARR] as const)
+  .map(p => `${p}=` as const);
 
 // default c-like comment format (js/rust/c)
 const DEFAULT_OPTIONS: CommentOptions & {delimiter: string} = {
   delimiter: '/',
   single: [/^\s*\/\/\s*/, null],
+  // eating the space before the comment makes it easier to work with inline-comments
   multi: [/\s*\/\*/, /\*\//],
 };
 
@@ -246,6 +247,23 @@ export const createDirectiveRegex = /* @__PURE__ */ (() => {
 // -----------------------------------------------------------------------------
 
 /**
+ * <N>Line parser
+ * @param  {string} param
+ * @param  {number} [def=1]
+ * @return {count: number; param: string;}
+ */
+export const parseLineCount = (param: string, def = 1): {count: number; param: string;} => {
+  const lineMatch = param.match(/(\d+)L$/);
+  let count = def;
+  if (lineMatch?.[1]) {
+    count = Number.parseInt(lineMatch[1]);
+    param = param.slice(0, -lineMatch[0].length);
+  }
+  return {count, param};
+};
+
+
+/**
  * action directive  parser
  * @param  {string} spec
  * @param  {CommentOptions} options
@@ -265,8 +283,7 @@ export const parseAction = /* @__PURE__ */ (() => {
     if (cache.has(spec)) { return cache.get(spec)!; }
 
     let split: null | [string, string] = null;
-    for (const item of PREFIXES) {
-      const iact = `${item}=`;
+    for (const iact of ACT_PREFIXS) {
       if (spec.startsWith(iact)) {
         split = [iact.replace('=', ''), spec.replace(iact, '')];
         break;
@@ -278,15 +295,10 @@ export const parseAction = /* @__PURE__ */ (() => {
       console.error(`[commentDirective:parseAction] bad/no action param: ${spec}`);
       return null;
     }
-    // line count if present -> 2L
-    const lineCountMatch = param.match(/(\d+)L$/);
-    const count = lineCountMatch?.[1]
-      ? Number.parseInt(lineCountMatch[1])
-      : (act === 'sed' ? 0 : 1);
 
     // remove X lines
     if (act === 'rm' && (param.startsWith('line') || (/^\d+L$/).test(param))) {
-      const result = { type: ACT_MAP.rml, count };
+      const result = { type: ACT_MAP.rml, count: parseLineCount(param).count };
       cache.set(spec, result);
       return result;
     }
@@ -299,65 +311,112 @@ export const parseAction = /* @__PURE__ */ (() => {
         console.error(`[commentDirective:parseAction] 'comment' only works with 'rm' or 'un' - not '${act}': ${param}`);
         return null;
       }
-      // @note -> cound is passed, but not implemented, probs not worth effort/overhead
-      const result = { type: atype, count };
+      // @note -> count is passed, but not implemented, probs not worth effort/overhead
+      const result = { type: atype, count: parseLineCount(param).count };
       cache.set(spec, result);
       return result;
     }
 
     // append/prepend/shift/pop
     if (isSeqActionType(act)) {
-      // create regex pattern using the custom delimiter
-      const escapedDelimiter = toEscapedPattern(options?.delimiter ?? '/', options.escape);
-      const meta = `(@(?<stop>(.*)))?(?<lines>\\d*L)?$`;
-      const endRegex = new RegExp(`^(?<val>(.*?))(${escapedDelimiter}(${meta}))?$`);
-      const endMatch = param.match(endRegex);
-      const val = endMatch?.groups?.['val'] ?? null;
-      if (!val) {
-        console.error(`[commentDirective:parseAction] no ${act} 'value' match found: ${param}`);
+      let seq = param;
+      let stop = null;
+
+      const lcount = parseLineCount(seq);
+      const count = lcount.count;
+      seq = lcount.param;
+
+      // parse stop condition like '/@stop-condition'
+      const delimiter = options?.delimiter ?? '/';
+      const stopMarker = `${delimiter}@`;
+      const stopIndex = seq.lastIndexOf(stopMarker);
+      if (stopIndex !== -1) {
+        stop = seq.slice(stopIndex + stopMarker.length);
+        seq = seq.slice(0, stopIndex);
+      }
+      // remove end delimiter
+      const endDeliIndex = seq.endsWith(delimiter) ? seq.lastIndexOf(delimiter) : -1;
+      if (endDeliIndex !== -1) { seq = seq.slice(0, endDeliIndex); }
+
+      const val = seq;
+      if (!val && act !== 'pop' && act !== 'shift') {
+        console.error(`[commentDirective:parseAction] no ${act} 'value' found: ${param}`);
         return null;
       }
-      const stop = endMatch?.groups?.['stop'] ?? null;
-      const lines = endMatch?.groups?.['lines'] ?? null;
       const result = {
-        val,
-        type: ACT_MAP[act as ActsSeq],
-        count: count ?? (Number.isInteger(lines) ? Number(lines) : null),
-        stop,
+        val, type: ACT_MAP[act as ActsSeq], count, stop,
       };
       cache.set(spec, result);
       return result;
     }
 
-    // match sed pattern like /pattern/replacement/[flags][lineCount]
+    // match sed pattern like /pattern/replacement/[flags][@stop][lineCount]
     if (act === 'sed') {
       const delimiter = options?.delimiter ?? '/';
-      // create regex pattern using the custom delimiter
-      const escapedDelimiter = toEscapedPattern(delimiter, options.escape);
-      const meta = `([gimuys]*)(@(?<stop>(.*)))?(?<lines>\\d*L)?$`;
-      // eslint-disable-next-line @stylistic/function-paren-newline
-      const sedRegex = new RegExp(
-        `^${escapedDelimiter}(.*?)${escapedDelimiter}(.*?)${escapedDelimiter}${meta}`);
-      const sedMatch = param.match(sedRegex);
-      if (!sedMatch) {
+      if (!param.startsWith(delimiter)) {
         console.error(`[commentDirective:parseAction] bad sed syntax: ${param}`);
         return null;
       }
-      const [, pattern, replacement, flags] = sedMatch;
+
+      // manual parse sed
+      const parts = [];
+      let currentPart = '';
+      let i = delimiter.length;
+      while (i < param.length) {
+        // handle escaped delimiter e.g: '/' becomes '\/'
+        if (param[i] === '\\' && param.startsWith(delimiter, i + 1)) {
+          currentPart += delimiter; // add delim itself to the cur part
+          i += delimiter.length + 1; // skip over the escape char and the delim
+        } else if (param.startsWith(delimiter, i)) {
+          // found a non-escaped delimiter -> markin the end of a part
+          parts.push(currentPart);
+          currentPart = '';
+          i += delimiter.length;
+          // after finding pattern and replacement; the rest is meta
+          if (parts.length === 2) {
+            parts.push(param.slice(i));
+            break;
+          }
+        } else {
+          // append regular chars
+          currentPart += param[i];
+          i++;
+        }
+      }
+
+      if (parts.length < 3) {
+        console.error(`[commentDirective:parseAction] bad sed syntax, not enough parts: ${param}`);
+        return null;
+      }
+
+      const [pattern, replacement, meta] = parts;
       if (typeof pattern !== 'string' || typeof replacement !== 'string') {
         console.error(`[commentDirective:parseAction] bad sed match: ${param}`);
         return null;
       }
-      const stop = sedMatch?.groups?.['stop'] ?? null;
+
+      // parse meta string: flags, stop, count
+      let restOfMeta = meta ?? '';
+      let stop = null;
+      let flags = '';
+      const lcount = parseLineCount(restOfMeta, 0);
+      let count = lcount.count;
+      restOfMeta = lcount.param;
+
+      const stopIndex = restOfMeta.indexOf('@');
+      if (stopIndex !== -1) {
+        flags = restOfMeta.slice(0, stopIndex);
+        stop = restOfMeta.slice(stopIndex + 1);
+      } else {
+        flags = restOfMeta;
+      }
+
+      const flagChars = flags.split('');
+      // if not global and no count default to 1
+      count = !count && !flagChars.includes('g') ? 1 : count;
 
       const result = {
-        type: ACT_MAP.sed,
-        pattern,
-        replacement,
-        flags: (flags ?? '').split(''), // regex flags
-        // if not global we re-set could to default 1
-        count: !count && !flags?.includes('g') ? 1 : count,
-        stop,
+        type: ACT_MAP.sed, pattern, replacement, flags: flagChars, count, stop,
       };
       cache.set(spec, result);
       return result;
@@ -431,6 +490,7 @@ const applyDirective = (
 ): number => {
   // rm the next - count lines
   if (action?.type === ACT_MAP.rml) { return i + action.count; }
+  // regex/match helpers
   const re = createDirectiveRegex(options);
 
   // if no action or action condition is not met
@@ -455,22 +515,19 @@ const applyDirective = (
       count,
       stop,
     } = action;
+    const rePatt = new RegExp(toEscapedPattern(pattern, options.escape), flags.length
+      ? flags.join('')
+      : undefined);
+    const reStop = stop ? new RegExp(toEscapedPattern(stop, options.escape)) : null;
+    // loop and replace till count or stop
     let processedLines = 0;
     while (j < lines.length && (processedLines < count || stop)) {
       const currentLine = lines[j] ?? '';
-      const nxt = currentLine.replace(
-        new RegExp(toEscapedPattern(pattern, options.escape), flags.length
-          ? flags.join('')
-          : undefined),
-        replacement,
-      );
-      out.push(nxt);
+      out.push(currentLine.replace(rePatt, replacement));
       j++;
       processedLines++;
-      if (stop && currentLine.match(new RegExp(toEscapedPattern(stop, options.escape)))) {
-        break;
-      }
-
+      // stop break
+      if (reStop && currentLine.match(reStop)) { break; }
     }
     // copy remaining lines in the range without modification
     while (j < lines.length && processedLines < count) {
@@ -489,7 +546,8 @@ const applyDirective = (
       stop,
       val,
     } = action;
-
+    const reStop = stop ? new RegExp(toEscapedPattern(stop, options.escape)) : null;
+    // loop and replace till count or stop
     let processedLines = 0;
     while (j < lines.length && (processedLines < count || stop)) {
       const currentLine = lines[j] ?? '';
@@ -513,13 +571,10 @@ const applyDirective = (
       out.push(nxt);
       j++;
       processedLines++;
-      if (stop && currentLine.match(new RegExp(toEscapedPattern(stop, options.escape)))) {
-        break;
-      }
+      if (reStop && currentLine.match(reStop)) { break; }
     }
     return j - 1;
   }
-
 
   const isUncomment = action.type === ACT_MAP.unc;
   const isRmcomment = action.type === ACT_MAP.rmc;
@@ -531,6 +586,8 @@ const applyDirective = (
   if (!currentLine || !currentLine.trim().length) { return j; }
   // unless explict false, adjust white space
   const spaceAdjust = options.spaceAdjust !== false;
+  // rm/trim end space(s)
+  const spaceTrim = (val: string) => (spaceAdjust ? val.replace(/\s+$/, '') : val);
 
   // check for single-line comment
   const singleStartMatch = currentLine.match(re.scar);
@@ -545,6 +602,7 @@ const applyDirective = (
 
     // single-line comment with end marker (like HTML <!-- -->)
     if (re.scdr) {
+      beforeComment = currentLine.slice(0, singleStartIndex);
       const singleEndIndex = currentLine.search(re.scdr);
       if (singleEndIndex > singleStartIndex) {
         const commentStartLength = singleStartMatch[0].length;
@@ -557,10 +615,11 @@ const applyDirective = (
         const afterComment = currentLine.slice(singleEndIndex + commentEndLength);
         if (isUncomment) {
           // add adjusted white space if empty space
+          beforeComment = currentLine.slice(0, singleStartIndex);
           if (spaceAdjust && !beforeComment.trim().length) {
             beforeComment = beforeComment + ' '.repeat(commentStartLength);
           }
-          out.push(`${beforeComment}${commentContent}${afterComment}`.replace(/\s+$/, ''));
+          out.push(spaceTrim(`${beforeComment}${commentContent}${afterComment}`));
           return j;
         }
         const resultLine = `${beforeComment}${afterComment}`;
@@ -574,8 +633,7 @@ const applyDirective = (
       const commentStartLength = singleStartMatch[0].length;
       const commentContent = currentLine.slice(singleStartIndex + commentStartLength);
       if (isUncomment) {
-        out.push(`${beforeComment}${commentContent}`.replace(/\s+$/, ''));
-        // out.push(`${beforeComment}${commentContent}`);
+        out.push(spaceTrim(`${beforeComment}${commentContent}`));
         return j;
       }
       beforeComment.trim().length > 0 && out.push(beforeComment);
@@ -621,7 +679,7 @@ const applyDirective = (
           currentLine.length - currentLine.trimStart().length,
         ));
       }
-      out.push(`${beforeComment}${commentContent}${afterComment}`.replace(/\s+$/, ''));
+      out.push(spaceTrim(`${beforeComment}${commentContent}${afterComment}`));
       return j;
     }
 
@@ -630,7 +688,6 @@ const applyDirective = (
     resultLine.trim().length > 0 && out.push(resultLine);
     return j;
   }
-
   // multi-line comment
   const commentLines: string[] = [];
   let inComment = false;
@@ -642,10 +699,7 @@ const applyDirective = (
   let commentEndDiff = 0; // for whitespace adj
   while (j < lines.length) {
     currentLine = lines[j];
-    if (!currentLine) {
-      j++;
-      continue;
-    }
+    if (!currentLine) { j++; continue; }
 
     const mcar = currentLine.search(re.mcar);
     if (!inComment && mcar !== -1) {
@@ -716,17 +770,16 @@ const applyDirective = (
       const resultLine = `${beforeComment}${uncommentedContent}${afterComment}`;
       if (resultLine.includes('\n')) {
         // multi-line case
-        resultLine.split('\n').forEach(line => out.push(line.replace(/\s+$/, '')));
+        resultLine.split('\n').forEach(line => out.push(spaceTrim(line)));
         return j - 1;
       }
-      out.push(resultLine.replace(/\s+$/, ''));
-      return j - 1;
-    } else {
-      // remove comment: in comment
-      const resultLine = `${beforeComment}${afterComment}`;
-      resultLine.trim().length > 0 && out.push(resultLine);
+      out.push(spaceTrim(resultLine));
       return j - 1;
     }
+    // remove comment: in comment
+    const resultLine = `${beforeComment}${afterComment}`;
+    resultLine.trim().length > 0 && out.push(resultLine);
+    return j - 1;
   } else if (currentLine && re.scar.test(currentLine)) {
     // remove comment: only if in comment of next line is single-line comment
     const resultLine = `${beforeComment}${afterComment}`;
@@ -775,27 +828,33 @@ export const commentDirective = (
 
   // split into [cond, if-true, if-false?]
   const splitDirectiveLine = (line: string): string[] | null => {
-    // much faster to do a indexOf check initially
+    // much faster to do a indexOf check initially (caching this fn isn't really worth it)
     if (line.indexOf('###[IF]') === -1) { return null; }
+    // only cache lines with comment directive
     let match = reDirective.exec(line)?.[1];
     if (!match) { return null; }
-    PREFIXES_RE.lastIndex = 0; // reset regex
     // rm trailing ;
-    if (match[match.length - 1] === ';') { match = match.slice(0, -1); }
-    const result: string[] = [];
-    let lastIndex = 0;
-    for (const rem of match.matchAll(PREFIXES_RE)) {
-      const index = rem.index;
-      // add the substring from the last index to the current index
-      index > lastIndex && result.push(match.substring(lastIndex, index));
-      lastIndex = index;
+    if (match.endsWith(';')) { match = match.slice(0, -1); }
+    // split via ';' and then re-join parts that were split incorrectly (like a ';' in sed)
+    const rawParts = match.split(';');
+    const head = rawParts?.[0];
+    if (head === undefined) { return null; }
+    // condition is always the first part
+    const result = [head];
+    for (let i = 1; i < rawParts.length; i++) {
+      const part = rawParts[i];
+      if (part === undefined) { continue; }
+      // action spec always start with 'prefix='
+      if (ACT_PREFIXS.some(p => part?.startsWith(p))) {
+        result.push(part);
+      } else {
+        // not a new action, so its a continuation of the prv one
+        result[result.length - 1] += ';' + part;
+      }
     }
-    // add the remaining part of the string after the last index
-    lastIndex < match.length && result.push(match.substring(lastIndex));
-    // must have an action and at least one condition
-    if (1 > result.length) { return null; }
-    // rm leading ; in conds like ;un=comment
-    return result.map(v => (v[0] === ';' ? v.slice(1) : v));
+    // must have a condition and one action
+    if (result.length < 2) { return null; }
+    return result;
   };
 
   // determines line offset, required for position if/when lines are removed (a headache)
@@ -813,6 +872,7 @@ export const commentDirective = (
     idx >= (prv?.[0] ?? 0) && cstack.push([idx, line]);
   };
 
+  let iglobal = 0;
   // while & break iterative loop
   while (true) {
     // 10000 loop limit - could happen with a bad user sed directive
@@ -828,7 +888,7 @@ export const commentDirective = (
     let passChanged = false;
 
     // global sed loop(s)
-    for (let i = 0; i < lines.length; i++) {
+    for (let i = iglobal; i < lines.length; i++) {
       const line = lines[i] as string;
       const parts = splitDirectiveLine(line);
       if (!parts) { continue; }
@@ -861,6 +921,8 @@ export const commentDirective = (
 
     // if global sed was applied, restart the main loop
     if (passChanged) { continue; }
+    // prevent re-run of global loop
+    iglobal = lines.length + 1;
     // reset as new loop
     out.length = 0;
     doffset = 0;
@@ -886,11 +948,13 @@ export const commentDirective = (
       dkeep && addStack([iadd, line]);
       // this while loop handles 'stacked' comment directives by pushing them
       // back into 'out' evaluate next time around, again, and again
-      while (reDirective.test(lines[i + 1] ?? '')) {
-        out.push(lines[i + 1] ?? '');
+      let nxtLine = lines[i + 1] ?? '';
+      while (nxtLine?.length && reDirective.test(nxtLine)) {
+        out.push(nxtLine);
         ++iadd;
         dkeep && addStack([i + 1, lines[i + 1] ?? '']);
         ++i;
+        nxtLine = lines[i + 1] ?? '';
       }
 
       const iprv = i;
@@ -908,22 +972,22 @@ export const commentDirective = (
 
   // rtn or re-insert comments
   if (!dkeep) { return tmplCur; }
-  const finalLines = tmplCur.split(/\r?\n/);
-  const cout: string[] = [];
-  for (const item of finalLines) {
-    while (cstack?.[0]?.[0] === cout.length) {
+  const tmplFin = tmplCur.split(/\r?\n/);
+  const fout: string[] = [];
+  for (const item of tmplFin) {
+    while (cstack?.[0]?.[0] === fout.length) {
       const insert = cstack.shift();
-      insert && cout.push(insert[1]);
+      insert && fout.push(insert[1]);
     }
-    cout.push(item ?? '');
+    fout.push(item ?? '');
   }
   // last lines
   while (cstack.length > 0) {
     const insert = cstack.shift();
-    insert && cout.push(insert[1]);
+    insert && fout.push(insert[1]);
   }
 
-  return cout.join('\n');
+  return fout.join('\n');
 };
 
 export default commentDirective;
