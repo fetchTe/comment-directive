@@ -351,7 +351,6 @@ export const parseAction = /* @__PURE__ */ (() => {
       // remove end delimiter
       const endDeliIndex = seq.endsWith(delimiter) ? seq.lastIndexOf(delimiter) : -1;
       if (endDeliIndex !== -1) { seq = seq.slice(0, endDeliIndex); }
-
       const val = seq;
       if (!val && act !== 'pop' && act !== 'shift') {
         console.error(`[commentDirective:parseAction] no ${act} 'value' found: ${param}`);
@@ -611,49 +610,22 @@ const applyDirective = (
   // rm/trim end space(s)
   const spaceTrim = (val: string) => (spaceAdjust ? val.replace(/\s+$/, '') : val);
 
-  // check for single-line comment
-  const singleStartMatch = currentLine.match(re.scar);
-  if (singleStartMatch) {
-    const singleStartIndex = currentLine.search(re.scar);
-    let beforeComment = currentLine.slice(0, singleStartIndex);
+  // check for single-line comment - only if no mult-line comment e.g: /* // match multi */
+  const imcar = re.mcar ? currentLine.search(re.mcar) : -1;
+  const scar = imcar === -1 ? currentLine.match(re.scar) : null;
+  if (scar) {
+    const iscar = scar.index as number;
+    let beforeComment = currentLine.slice(0, iscar);
     // account for white space before comment
     if (spaceAdjust) {
       beforeComment = ' '.repeat(Math.max(0, currentLine.length - currentLine.trimStart().length))
         + beforeComment;
     }
 
-    // single-line comment with end marker (like HTML <!-- -->)
-    if (re.scdr) {
-      beforeComment = currentLine.slice(0, singleStartIndex);
-      const singleEndIndex = currentLine.search(re.scdr);
-      if (singleEndIndex > singleStartIndex) {
-        const commentStartLength = singleStartMatch[0].length;
-        const singleEndMatch = currentLine.slice(singleEndIndex).match(re.scdr);
-        const commentEndLength = singleEndMatch ? singleEndMatch[0].length : 0;
-        const commentContent = currentLine.slice(
-          singleStartIndex + commentStartLength,
-          singleEndIndex,
-        );
-        const afterComment = currentLine.slice(singleEndIndex + commentEndLength);
-        if (isUncomment) {
-          // add adjusted white space if empty space
-          beforeComment = currentLine.slice(0, singleStartIndex);
-          if (spaceAdjust && !beforeComment.trim().length) {
-            beforeComment = beforeComment + ' '.repeat(commentStartLength);
-          }
-          out.push(spaceTrim(`${beforeComment}${commentContent}${afterComment}`));
-          return j;
-        }
-        const resultLine = `${beforeComment}${afterComment}`;
-        (ekeep || resultLine.trim().length > 0) && out.push(resultLine);
-        return j;
-      }
-    }
-
     // single-line comment without end marker (like // or #)
     if (!re.scdr) {
-      const commentStartLength = singleStartMatch[0].length;
-      const commentContent = currentLine.slice(singleStartIndex + commentStartLength);
+      const commentStartLength = scar[0].length;
+      const commentContent = currentLine.slice(iscar + commentStartLength);
       if (isUncomment) {
         out.push(spaceTrim(`${beforeComment}${commentContent}`));
         return j;
@@ -662,36 +634,63 @@ const applyDirective = (
         && out.push(beforeComment + (ekeep && !dkeep ? '\n' : ''));
       return j;
     }
+
+    // single-line comment with end marker like HTML: <!-- --> (if multi nulled out)
+    beforeComment = currentLine.slice(0, iscar);
+    const iscdr = currentLine.search(re.scdr);
+    if (iscdr > iscar) {
+      const commentStartLength = scar[0].length;
+      // slice and match ending, like: -->
+      const singleEndMatch = currentLine.slice(iscdr).match(re.scdr);
+      const commentEndLength = singleEndMatch ? singleEndMatch[0].length : 0;
+      const afterComment = currentLine.slice(iscdr + commentEndLength);
+      if (isUncomment) {
+        // add adjusted white space if empty space
+        beforeComment = currentLine.slice(0, iscar);
+        if (spaceAdjust && !beforeComment.trim().length) {
+          beforeComment = beforeComment + ' '.repeat(commentStartLength);
+        }
+        out.push(spaceTrim(`${beforeComment}${currentLine.slice(
+          iscar + commentStartLength,
+          iscdr,
+        )}${afterComment}`));
+        return j;
+      }
+      const resultLine = `${beforeComment}${afterComment}`;
+      (ekeep || resultLine.trim().length > 0) && out.push(resultLine);
+      return j;
+    }
   }
+
+  // no multi
+  if (!re.mcar || !re.mcdr) { return i; }
 
   // check if start/end patterns equal -> like python ('''|""")
   const sameStartEnd = re.mcar.source === re.mcdr.source;
-  const scar = currentLine.search(re.mcar);
-  let scdr = -1;
-  if (scar !== -1) {
+  let imcdr = -1;
+  if (imcar !== -1) {
     // for same start/end patterns, find the next occurrence after the start
     if (sameStartEnd) {
-      const nextMatch = currentLine.slice(scar + 1).search(re.mcdr);
+      const nextMatch = currentLine.slice(imcar + 1).search(re.mcdr);
       if (nextMatch !== -1) {
-        scdr = scar + 1 + nextMatch;
+        imcdr = imcar + 1 + nextMatch;
       }
     } else {
       // different start/end patterns
-      scdr = currentLine.search(re.mcdr);
+      imcdr = currentLine.search(re.mcdr);
     }
   }
 
   // if single-line multi-line comment case
-  if (scar !== -1 && scdr !== -1 && scdr > scar) {
+  if (imcar !== -1 && imcdr !== -1 && imcdr > imcar) {
     // get the actual matched comment markers to know their length
-    const commentStartMatch = currentLine.slice(scar).match(re.mcar);
-    const commentEndMatch = currentLine.slice(scdr).match(re.mcdr);
+    const commentStartMatch = currentLine.slice(imcar).match(re.mcar);
+    const commentEndMatch = currentLine.slice(imcdr).match(re.mcdr);
     const commentStartLength = commentStartMatch ? commentStartMatch[0].length : 3;
     const commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
-
-    let beforeComment = currentLine.slice(0, scar);
-    const commentContent = currentLine.slice(scar + commentStartLength, scdr);
-    const afterComment = currentLine.slice(scdr + commentEndLength);
+    let beforeComment = currentLine.slice(0, imcar);
+    const commentContent = currentLine.slice(imcar + commentStartLength, imcdr);
+    const afterComment = currentLine.slice(imcdr + commentEndLength);
 
     // uncomment: keep the content inside and rm markers
     if (isUncomment) {
@@ -724,39 +723,39 @@ const applyDirective = (
   let commentEndDiff = 0; // for whitespace adj
   while (j < lines.length) {
     currentLine = lines[j] ?? '';
-    const mcar = currentLine.search(re.mcar);
-    if (!inComment && mcar !== -1) {
+    lmcar = currentLine.search(re.mcar);
+    if (!inComment && lmcar !== -1) {
       inComment = true;
-      beforeComment = currentLine.slice(0, mcar);
-      const commentStartMatch = currentLine.slice(mcar).match(re.mcar);
+      beforeComment = currentLine.slice(0, lmcar);
+      const commentStartMatch = currentLine.slice(lmcar).match(re.mcar);
       commentStartLength = commentStartMatch ? commentStartMatch[0].length : 3;
       commentStartDiff = commentStartMatch && spaceAdjust
         ? commentStartMatch[0].length - commentStartMatch[0].trimStart().length
         : 0;
-      const afterStart = currentLine.slice(mcar + commentStartLength);
+      const afterStart = currentLine.slice(lmcar + commentStartLength);
 
       // check for end marker on the same line (but after the start)
-      let mcdr = -1;
+      let lmcdr = -1;
       if (sameStartEnd) {
         // if same start/end patterns -> find next occurrence
-        mcdr = afterStart.search(re.mcdr);
+        lmcdr = afterStart.search(re.mcdr);
         // adjust to absolute position
-        if (mcdr !== -1) { mcdr = mcar + commentStartLength + mcdr; }
+        if (lmcdr !== -1) { lmcdr = lmcar + commentStartLength + lmcdr; }
       } else {
-        mcdr = currentLine.search(re.mcdr);
+        lmcdr = currentLine.search(re.mcdr);
         // make sure end comes after start
-        if (mcdr !== -1 && mcdr <= mcar) { mcdr = -1; }
+        if (lmcdr !== -1 && lmcdr <= lmcar) { lmcdr = -1; }
       }
 
       // comment ends on the same line
-      if (mcdr !== -1) {
-        const commentEndMatch = currentLine.slice(mcdr).match(re.mcdr);
+      if (lmcdr !== -1) {
+        const commentEndMatch = currentLine.slice(lmcdr).match(re.mcdr);
         commentEndLength = commentEndMatch ? commentEndMatch[0].length : 3;
         commentEndDiff = commentEndMatch && spaceAdjust
           ? commentEndMatch[0].length - commentEndMatch[0].trimEnd().length
           : 0;
-        commentLines.push(currentLine.slice(mcar + commentStartLength, mcdr));
-        afterComment = currentLine.slice(mcdr + commentEndLength);
+        commentLines.push(currentLine.slice(lmcar + commentStartLength, lmcdr));
+        afterComment = currentLine.slice(lmcdr + commentEndLength);
         j++;
         break;
       }
@@ -764,6 +763,7 @@ const applyDirective = (
       j++;
       continue;
     }
+    // end match or ++
     if (inComment) {
       const mcdr = currentLine.search(re.mcdr);
       if (mcdr !== -1) {
@@ -780,6 +780,7 @@ const applyDirective = (
     }
     j++;
   }
+
 
   if (inComment) {
     // uncomment: output the comment content and preserve surrounding
