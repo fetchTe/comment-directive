@@ -29,11 +29,12 @@ const ACT_PREFIXS = (['rm', 'un', 'sed', ...ACT_SEQ_ARR] as const)
 const DEFAULT_OPTIONS: CommentOptionsR = {
   delimiter: '/',
   keepDirective: false,
+  looseDirective: false,
   spaceAdjust: true,
   keepEmptyLines: false,
   escape: true,
   identifier: '###[IF]',
-  single: [/^\s*\/\/\s*/, null],
+  single: [/\s*\/\/\s*/, null],
   // eating the space before the comment makes it easier to work with inline-comments
   multi: [/\s*\/\*/, /\*\//],
 };
@@ -43,11 +44,13 @@ const DEFAULT_OPTIONS: CommentOptionsR = {
 // -----------------------------------------------------------------------------
 export type CommentOptions = {
   single: [start: RegExp | string, end?: null | RegExp | string];
-  multi: [start: RegExp | string, end: RegExp | string];
+  multi: [start: RegExp | string, end: RegExp | string] | [start: null, end: null];
   /* disable white-space logic when removing/uncommenting (default: true) */
   spaceAdjust?: boolean;
   /* keep directive comments in the output (default: false) */
   keepDirective?: boolean;
+  /* allows directives on lines with other content (default: false) */
+  looseDirective?: boolean;
   /* change sed delimiter (default: '/') */
   delimiter?: string;
   /* preserve empty removed comment/lines/directive lines (default: false) */
@@ -128,8 +131,8 @@ type ReDirective = {
   dir: RegExp;
   scar: RegExp;
   scdr: RegExp | null;
-  mcar: RegExp;
-  mcdr: RegExp;
+  mcar: RegExp | null;
+  mcdr: RegExp | null;
 };
 
 
@@ -242,14 +245,23 @@ export const createDirectiveRegex = /* @__PURE__ */ (() => {
       : singleEnd?.source;
 
     const id = toEscapedPattern(options.identifier);
+
+    // non-loose anchors
+    const [astart, aend] = options.looseDirective
+      ? ['', '']
+      : [
+          start.startsWith('^') ? '' : '^',
+          end?.endsWith('$') ? '' : '\\s*?$',
+        ];
     cache = {
       scar: toRegex(singleStart, escape), // single start
       scdr: singleEnd ? toRegex(singleEnd, escape) : null, // single end
-      mcar: toRegex(options.multi[0], escape), // multi start
-      mcdr: toRegex(options.multi[1], escape), // multi end
+      // could use /(?!)/ negative lookahead pattern need be to keep same logic
+      mcar: options.multi[0] ? toRegex(options.multi[0], escape) : null, // multi start
+      mcdr: options.multi[1] ? toRegex(options.multi[1], escape) : null, // multi end
       dir: !end
-        ? new RegExp(`${start}\\s*${id}(.+)$`)
-        : new RegExp(`${start}\\s*${id}(.+?)\\s*?${end}\\s*?$`),
+        ? new RegExp(`${astart}${start}\\s*${id}(.+)${aend.length ? '$' : ''}`)
+        : new RegExp(`${start}\\s*${id}(.+?)\\s*?${end}${aend}`),
     };
     return cache;
   };
@@ -850,7 +862,9 @@ export const commentDirective = (
   const identifier = options?.identifier ?? DEFAULT_OPTIONS.identifier;
   if (!options.identifier) { options.identifier = identifier; }
 
-  const dkeep = options?.keepDirective; // keep directives
+  // keep directives - if loose forced to keep?
+  const loose = options?.looseDirective;
+  const dkeep = options?.keepDirective;
   const reDirective = createDirectiveRegex(options).dir;
 
   // split into [cond, if-true, if-false?]
@@ -887,7 +901,7 @@ export const commentDirective = (
   // determines line offset, required for position if/when lines are removed (a headache)
   const addStack = ([idx, line]: [idx: number, line: string]) => {
     // if not keeping comments we can ignore all stack/logic
-    if (!dkeep) { return; }
+    if (!dkeep) { return null; }
     // check if the prvious cmt removed lines and offset the insert idx
     const prv = cstack[cstack.length - 1];
     const action = !options.keepEmptyLines && prv
@@ -897,6 +911,7 @@ export const commentDirective = (
     // ensure we never push a line idx lower than last; as this can/is called recursivly
     idx = idx - doffset;
     idx >= (prv?.[0] ?? 0) && cstack.push([idx, line]);
+    return null;
   };
 
   let iglobal = 0;
@@ -969,16 +984,19 @@ export const commentDirective = (
         dkeep && out.push(line);
         continue;
       }
-      const action = getAction(dir, flags);
-
-      let iadd = i;
-      dkeep && addStack([iadd, line]);
+      if (dkeep) {
+        addStack([i, line]);
+      } else if (loose) {
+        // @ts-expect-error if loose we have to rm/hack the directive (should silce?)
+        lines[i] = lines[i].replace(reDirective.exec(line)?.[0] ?? '', '');
+        // if chars then we need to save content in: content // ###[IF]prod=1
+        lines[i]?.trim()?.length && out.push(lines[i] ?? '');
+      }
       // this while loop handles 'stacked' comment directives by pushing them
       // back into 'out' evaluate next time around, again, and again
       let nxtLine = lines[i + 1] ?? '';
       while (nxtLine?.length && reDirective.test(nxtLine)) {
         out.push(nxtLine);
-        ++iadd;
         dkeep && addStack([i + 1, lines[i + 1] ?? '']);
         ++i;
         nxtLine = lines[i + 1] ?? '';
@@ -986,6 +1004,7 @@ export const commentDirective = (
 
       const iprv = i;
       const iout = out.length;
+      const action = getAction(dir, flags);
       // @todo: remove this mutation/pass-around-logic
       i = applyDirective(i, action, out, lines, options, addStack);
       // since rm'ing a comment doesn't always remove a line this calculates diff
@@ -1018,4 +1037,3 @@ export const commentDirective = (
 };
 
 export default commentDirective;
-
