@@ -711,6 +711,9 @@ const applyDirective = (
       && out.push(resultLine + (ekeep && !dkeep ? '\n' : ''));
     return j;
   }
+  let lmcar = currentLine.search(re.mcar);
+  // if no muli-line comment start on current line, nothing left to do
+  if (lmcar === -1) { return i; }
 
   // multi-line comment
   const commentLines: string[] = [];
@@ -785,31 +788,25 @@ const applyDirective = (
   if (inComment) {
     // uncomment: output the comment content and preserve surrounding
     if (isUncomment) {
-      const uncommentedContent = commentLines.join('\n');
       // add adjusted white space if empty space
       if (spaceAdjust && !beforeComment.trim().length) {
         beforeComment = beforeComment + ' '.repeat(commentStartDiff);
         afterComment = ' '.repeat(commentEndDiff) + afterComment;
       }
-      const resultLine = `${beforeComment}${uncommentedContent}${afterComment}`;
-      if (resultLine.includes('\n')) {
-        // multi-line case
-        resultLine.split('\n').forEach(line => out.push(spaceTrim(line)));
-        return j - 1;
-      }
-      out.push(spaceTrim(resultLine));
+      const resultLine = `${beforeComment}${commentLines.join('\n')}${afterComment}`;
+      resultLine.split('\n').forEach(line => out.push(spaceTrim(line)));
       return j - 1;
     }
-
     // remove comment: in comment
     const resultLine = `${beforeComment}${afterComment}`
       + (ekeep ? '\n'.repeat(commentLines.length - (dkeep ? 1 : 0)) : '');
     (ekeep || resultLine.trim().length > 0) && out.push(resultLine);
     return j - 1;
-  } else if (currentLine && re.scar.test(currentLine)) {
-    // remove comment: only if in comment of next line is single-line comment
-    const resultLine = `${beforeComment}${afterComment}`;
-    (ekeep || resultLine.trim().length > 0) && out.push(resultLine);
+  } else if (currentLine?.length && re.scar.test(currentLine)) {
+    // @deprecate? -> this covered an edge case which cant happen anymore?
+    // remove comment: only if comment of next line is single-line comment
+    (ekeep || beforeComment.trim().length > 0) && out.push(beforeComment);
+    (ekeep || afterComment.trim().length > 0) && out.push(afterComment);
     return j - 1;
   }
 
