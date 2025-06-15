@@ -29,7 +29,7 @@ export const DEFAULT_OPTIONS: CommentOptionsR = {
   delimiter: '/',        // sed and sequence actions delimiter (default: '/')
   identifier: '###[IF]', // comment directive identifier (default: '###[IF]')
   // parse options
-  escape: false,         // escape regex patterns to match literal string (default: true)
+  escape: true,          // escape regex patterns to match literal strings (default: true)
   loose: false,          // allow directives on lines with other content (default: false)
   nested: false,         // allow nested multi-line comments (default: false)
   disableCache: false,   // if memory is a concern in absurd/extreme use cases (default: false)
