@@ -175,14 +175,6 @@ build_esm:  ## builds the .js (esm) export
 build_esm_min:  # builds the .min.js (esm) export
 	@$(MAKE) _BFMT="$(_BIIF)" _BEXE="min.$(EXE)" _BFLG="$(_BFLG_MIN)" _bun_code_factory
 
-.PHONY: build_mjs
-build_mjs:  ## builds the .mjs (esm) export
-	@$(MAKE) _BFMT="esm" _BEXE="mjs" _BFLG="$(_BFLG_EXP)" _bun_code_factory
-
-.PHONY: build_mjs_min
-build_mjs_min:  # builds the .min.mjs (esm) export
-	@$(MAKE) _BFMT="esm" _BEXE="min.mjs" _BFLG="$(_BFLG_MIN)" _bun_code_factory
-
 .PHONY: build_declarations
 build_declarations: ## builds typescript .d.{ts,mts,cts} declarations
 	@$(MAKE) MSG="build_declarations" _init

@@ -769,7 +769,6 @@ Contributions, pull requests, and suggestions are welcome. To get started, ensur
    build                 builds the .{js,d.ts} (skips: lint, test, and .min.* build)
    build_cjs             builds the .cjs export
    build_esm             builds the .js (esm) export
-   build_mjs             builds the .mjs (esm) export
    build_declarations    builds typescript .d.{ts,mts,cts} declarations
   -------------------
    install               installs dependencies via bun
