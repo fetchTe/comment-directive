@@ -32,7 +32,7 @@ export const DEFAULT_OPTIONS: CommentOptionsR = {
   escape: false,         // escape regex patterns to match literal string (default: true)
   loose: false,          // allow directives on lines with other content (default: false)
   nested: false,         // allow nested multi-line comments (default: false)
-  disableCache: false,   // if memory is a concern in absurd/extream use cases (default: false)
+  disableCache: false,   // if memory is a concern in absurd/extreme use cases (default: false)
   // keep/preserve options
   keepDirective: false,  // keep comment directive in output (default: false)
   keepEmpty: false,      // keep/preserve removed empty comments/lines (default: false)
@@ -58,9 +58,9 @@ export type CommentOptions = {
   nested?: boolean;
   /* if memory is a concern while processing huge/many different directives (default: false) */
   disableCache?: boolean;
-  /* escape sed (default: true) */
+  /* escape regex patterns to match literal strings (default: true) */
   escape?: boolean;
-  /* disable white-space logic when removing/uncommenting (default: true) */
+  /* disable white-space logic when removing/uncommenting (default: false) */
   keepSpace?: boolean;
   /* keep directive comments in the output (default: false) */
   keepDirective?: boolean;
@@ -340,7 +340,7 @@ const parseLineCount = (param: string, def = 1): {count: number; param: string;}
  * @internal
  */
 const parseAction = (() => {
-  // good perf gain, but it could lead to memory issues in absurd/extream use cases
+  // good perf gain, but it could lead to memory issues in absurd/extreme use cases
   let cache: null | Map<string, Actions | null>  = null;
   // strict equality cache dump based on options - WeakMap not worth the overhead
   let lastOptions: CommentOptionsR | null = null;
