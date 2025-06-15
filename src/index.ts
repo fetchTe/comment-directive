@@ -1,6 +1,8 @@
 // -----------------------------------------------------------------------------
 // @id::constants
 // -----------------------------------------------------------------------------
+
+// maps short action codes to their full names
 const ACT_MAP = {
   rml: 'rm_line',
   rmc: 'rm_comment',
@@ -64,10 +66,12 @@ export type CommentOptions = {
   disableCache?: boolean;
 };
 
+// CommentOptions [R]equired
 type CommentOptionsR = {
   [K in keyof CommentOptions]-?: CommentOptions[K];
 };
 
+// flags to control directive logic like: { prod: true, ver: 1, ok: 'cap' }
 export type FlagStruc = Record<string, boolean | number | string>;
 
 export type ActMap = typeof ACT_MAP;
@@ -96,6 +100,7 @@ export type ActionPrepend = {
   count: number;
   stop: null | string;
 };
+
 // remove start
 export type ActionShift = {
   type: ActMap['shift'];
@@ -103,6 +108,7 @@ export type ActionShift = {
   count: number;
   stop: null | string;
 };
+
 // add end
 export type ActionAppend = {
   type: ActMap['append'] | ActMap['push'];
@@ -110,6 +116,7 @@ export type ActionAppend = {
   count: number;
   stop: null | string;
 };
+
 // remove end
 export type ActionPop = {
   type: ActMap['pop'];
@@ -123,6 +130,8 @@ export type ActionSequence = ActionAppend | ActionPrepend | ActionShift | Action
 export type Actions = ActionRemoveLines | ActionRemoveComment | ActionUnComment
 | ActionSedReplace | ActionSequence;
 
+
+// parsed comment directive
 export type Directive<A = Actions> = {
   key: string;
   value: string | number | boolean;
@@ -130,6 +139,8 @@ export type Directive<A = Actions> = {
   ifFalse: A | null;
 };
 
+
+// compiled regex patterns for directive matching
 type ReDirective = {
   dir: RegExp;
   scar: RegExp;
@@ -142,14 +153,27 @@ type ReDirective = {
 // -----------------------------------------------------------------------------
 // @id::helpers
 // -----------------------------------------------------------------------------
+
+/**
+ * type gaurd for number
+ * @param  {unknown} value
+ * @return {boolean} - value is number
+ */
 const isNumber = <T extends number = number>(value: unknown): value is T =>
   typeof value === 'number';
 
+
+/**
+ * type gaurd for string
+ * @param  {unknown} value
+ * @return {boolean} - value is string
+ */
 const isString = <T extends string = string>(value: unknown): value is T =>
   typeof value === 'string';
 
+
 /**
- * action get with type in-tack
+ * action get from directive
  * @param  {type} dir         - directive
  * @param  {FlagStruc} flags  - flags
  * @return {A | null}
@@ -171,6 +195,7 @@ const getAction = <A extends Actions>(dir?: Directive<A> | null, flags?: FlagStr
 const isSeqActionType = (act?: string): act is ActsSeq =>
   !!(act && ACT_SEQ_ARR.find(v => v === act));
 
+
 /**
  * type gaurd for sequence action
  * @param  {string} act - action
@@ -178,6 +203,7 @@ const isSeqActionType = (act?: string): act is ActsSeq =>
  */
 const isSeqAction = (act?: Actions): act is ActionSequence =>
   isSeqActionType(act?.type);
+
 
 /**
  * type gaurd for sed action
@@ -199,9 +225,10 @@ const isSedDirectiveG = (dir: Directive | null): dir is Directive<ActionSedRepla
 
 
 /**
- * helper to create regex from string or return existing regex
- * @param  {RegExp | string} pattern
- * @return {RegExp}
+ * escapes a string for use in a regex pattern as a string literal
+ * @param  {string} pattern
+ * @param  {boolean} [regexEscape=true] - whether to escape
+ * @return {string}
  */
 const toEscapedPattern = (pattern: string, regexEscape = true): string => {
   try {
@@ -215,8 +242,9 @@ const toEscapedPattern = (pattern: string, regexEscape = true): string => {
 
 
 /**
- * helper to create regex from string or return existing regex
+ * creates a regex from a string or returns an existing regex
  * @param  {RegExp | string} pattern
+ * @param  {boolean} [regexEscape=true] - whether to escape
  * @return {RegExp}
  */
 const toRegex = (pattern: RegExp | string, regexEscape = true): RegExp =>
@@ -281,10 +309,11 @@ const createDirectiveRegex = (() => {
 // -----------------------------------------------------------------------------
 
 /**
- * <N>Line parser
+ * parses out the line count like '4L' from a param string
  * @param  {string} param
- * @param  {number} [def=1]
+ * @param  {number} [def=1] - default count
  * @return {count: number; param: string;}
+ * @internal
  */
 const parseLineCount = (param: string, def = 1): {count: number; param: string;} => {
   const lineMatch = param.match(/(\d+)L$/);
@@ -469,8 +498,8 @@ const parseAction = (() => {
 
 /**
  * parse directive line or null
- * @param  {null | string[]} parts       - directive parts
- * @param  {string} line                 - line - used to report errors
+ * @param  {null | string[]} parts   - directive parts
+ * @param  {string} line             - line - used to report errors
  * @param  {CommentOptionsR} options - comment format
  * @return {Directive | null}
  */
@@ -509,15 +538,17 @@ const parseDirective = (
 // @id::main/logic
 // -----------------------------------------------------------------------------
 
+
 /**
- * apply/processes a directive at lines[i], mutates out, and returns the new index i
- * @param  {string[]} lines              - lines to process
- * @param  {number} i                    - current index
- * @param  {Directive} dir               - directive to process
- * @param  {FlagStruc} flags             - flags to test directive against
- * @param  {string[]} out                - output -> mutates
- * @param  {CommentOptionsR} options - comment format type
- * @return {number}                      - new index
+ * applies a directive action, mutates the output array, and returns the new line index
+ * @param  {number} idx                - current index in lines
+ * @param  {Actions | null} action     - action to apply
+ * @param  {(string | number)[]} out   - output array (mutated)
+ * @param  {(string | number)[]} lines - source lines array
+ * @param  {CommentOptionsR} options   - processor options
+ * @param  {ReDirective} re            - compiled regex pattern
+ * @return {number}                    - new index to continue processing from
+ * @internal
  */
 const applyDirective = (
   i: number,
