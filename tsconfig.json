@@ -1,0 +1,302 @@
+/**                                                                    @tsconfig
+@desc: The compiler options for TypeScript;
+     : stripped of old/rarely-used options & garnished with short-desc/links/refs
+@docs: typescriptlang.org/tsconfig
+     : typescriptlang.org/docs/handbook/compiler-options.html  (tsc/cli docs)
+     : 2ality.com/2025/01/tsconfig-json.html
+@vers: 5.8.0 (2025-02)
+@note: human generated
+@cli : tsc --showConfig (prints the final/populated configuration)
+
+--------------------------------------------------------------------------------
+@TOC
+ 1. Include             (files to include in the compilation)
+ 2. Exclude             (files to exclude from the compilation)
+ 3. Extends             (extend this config with another tsconfig)
+ 4. Compiler Options    (how to process/transpile TypeScript)
+ 5. Compiler/Modules    (module system and module-related, e.g. CommonJS, ES6)
+ 6. Compiler/Lang/Env   (ECMAScript version/global language features)
+ 7. Compiler/Emit       (emitted output generation/source maps/declaration files)
+ 8. Compiler/Interop    (interoperability between module systems/tools/libs)
+ 9. Compiler/JavaScript (JavaScript support)
+10. Compiler/Type Check (type checking strictness, behavior, and reporting)
+11. References          (project references for composite projects)
+12. Watch Options       (watch mode/incremental compilation)
+13. Type Acquisition    (automatic/background type download outside node_modules)
+14: $schema             (not strictly part of spec but used by external tools)
+
+--------------------------------------------------------------------------------
+@target & lib (type definitions) for built-in JS APIs (case-insensitive):
+  + es3    - 1999 A.D.
+  + es5    - Core definitions for all ES5 functionality
+  + es6    - Alias for es2015
+  + es7    - Alias for es2016
+  + es2015 - array.find, Promise, Proxy, Symbol, Map, Set, Reflect
+  + es2016 - array.include
+  + es2017 - Object.entries/values,, Atomics, SharedArrayBuffer, date.formatToParts, typed arrays
+  + es2018 - async iterables, promise.finally, Intl.PluralRules, regexp.groups
+  + es2019 - array.flat, array.flatMap, Object.fromEntries, string.trimStart, string.trimEnd
+  + es2020 - string.matchAll
+  + es2021 - promise.any, string.replaceAll
+  + es2022 - array.at, RegExp.hasIndices
+  + es2023 - array.with, array.findLast, array.findLastIndex, array.toSorted, array.toReversed
+  + esnext - Additional APIs available in ESNext
+
+@lib exclusive (type definitions) for built-in JS APIs (case-insensitive):
+  + DOM        - window, document (DOM definitions)
+  + WebWorker  - APIs available in WebWorker contexts
+  + ScriptHost - APIs for the Windows Script Hosting System
+  + (low-level) typescriptlang.org/tsconfig/#individual-library-components
+
+@glob patterns:
+  + * matches zero or more characters (excluding directory separators)
+  + ? matches any one character (excluding directory separators)
+  + **\/ matches any directory nested to any level
+***                                                                           */
+
+{
+  // ---------------------------------------------------------------------------
+  // 1:Include
+  // @docs: typescriptlang.org/tsconfig/#include
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+
+  // ---------------------------------------------------------------------------
+  // 2:Exclude
+  // @docs: typescriptlang.org/tsconfig/#exclude
+  // @note: exclude only changes which files are included as a result of the include,
+  //        and a file specified by exclude can still become part of your codebase
+  "exclude": ["**/dist", "**/node_modules", "**/temp", "**/testBin"],
+
+  // ---------------------------------------------------------------------------
+  // 3:Extends (extend this config with another tsconfig)
+  // @docs: typescriptlang.org/tsconfig/#extends
+  // e.g. : ["./tsconfig-base.json"]
+  "extends": [],
+
+
+  // ---------------------------------------------------------------------------
+  // 4:Compiler Options
+  // @docs: typescriptlang.org/tsconfig/#compilerOptions
+  // @note: Modules & Lang/Env listed first - most used/relevant/important
+  "compilerOptions": {
+    // 5:Modules
+    // @docs: typescriptlang.org/tsconfig/#Modules_6244
+    // -------------------------------------------------------------------------
+    // Modules/paths (how TS should resolve an import in your require/imports)
+    // -------------------------------
+    // @docs: typescriptlang.org/tsconfig/#paths
+    // @note: won't play nicely with bun until: github.com/oven-sh/bun/pull/16163
+    // @e.g.: { "app/*": ["./src/app/*"], "jquery": ["./vendor/dist/jquery"] }
+    "paths": {},
+
+    // Modules/types (types included in the global scope)
+    // -------------------------------
+    // @docs: typescriptlang.org/tsconfig/#types
+    // @dets: typescriptlang.org/docs/handbook/modules/theory.html#module-resolution
+    // @note: use 'typeRoots' if you need to designate particular type folders
+    // -------------------------------
+    "types": [
+      "@types/bun"
+    ],
+
+    // Modules/baseUrl (base directory - like "./src")
+    // -------------------------------
+    // @docs: typescriptlang.org/tsconfig/#baseUrl
+    // @note: is no longer required to be set when using paths (TypeScript 4.1)
+    //        not recommended, unless AMD module loader/context needed
+    "baseUrl": null,
+
+    // Modules/module (sets the module system for the program)
+    // -------------------------------
+    // @docs: typescriptlang.org/tsconfig/#module
+    //      : typescriptlang.org/docs/handbook/modules/reference.html#the-module-compiler-option
+    //      : typescriptlang.org/docs/handbook/modules/theory.html#the-module-output-format
+    // @note: Whether ES modules or not, node16 and nodenext are the only correct
+    //        options for all apps/libraries that are intended to run in Node.js v12+. (per docs)
+    //        Changing 'module' changes the default 'moduleResolution' (below)
+    // @opts: none, commonjs, amd, umd, system, es6/es2015, es2020, es2022,
+    //        esnext, node16, nodenext, preserve
+   "module": "esnext",
+
+    // Modules/moduleResolution (resolution strategy)
+    // -------------------------------
+    // @docs: typescriptlang.org/tsconfig/#moduleResolution
+    //      : typescriptlang.org/docs/handbook/modules/theory.html#module-resolution
+    // @note: conditional default based on (the above) 'module' value;
+    //        bundler~=nodenext (without file-extension requirement on imports)
+    //        Defaults:
+    //          module=(node16|nodenext) -> 'module'
+    //          module=(amd|umd|system|es6/es2015) -> 'classic''
+    //          module=* -> 'node' (otherwise/default case)
+    // @opts: classic, node10/node, node16, nodenext, bundler
+    "moduleResolution": "bundler",
+
+    // Modules/imports
+    // -------------------------------
+     // allow imports with an extension that isn't .js or .ts (e.g. import style.css)
+    "allowArbitraryExtensions": true,
+    // allows files to import each other with a ts-specific extensions .{ts,mts,tsx}
+    // @docs: typescriptlang.org/tsconfig/#allowImportingTsExtensions
+    "allowImportingTsExtensions": true,
+    // support transforming module specifiers (e.g. './utils.ts' into './utils.js')
+    // @note: may want to enable (env/dependent) alongside 'allowImportingTsExtensions'
+    // @docs: typescriptlang.org/tsconfig/#rewriteRelativeImportExtensions
+    //      : devblogs.microsoft.com/typescript/announcing-typescript-5-7-rc/#path-rewriting-for-relative-paths
+    //      : github.com/microsoft/TypeScript/issues/49083
+    "rewriteRelativeImportExtensions": true,
+    // type checks import (e.g. import 'not-404') whitelist/override via: ./src/globals.d.ts
+    // @docs: typescriptlang.org/tsconfig/#noUncheckedSideEffectImports
+    "noUncheckedSideEffectImports": true,
+
+    // Modules/misc
+    // -------------------------------
+    "allowUmdGlobalAccess": false, // global UMD exports like jQuery (false=import decl require)
+    "resolveJsonModule": true,     // allows importing modules with a .json extension
+
+    // 6:Language & Environment
+    // @docs: typescriptlang.org/tsconfig/#Language_and_Environment_6254
+    // -------------------------------------------------------------------------
+    // Targets (which JS features are downleveled/left-intact)
+    // -------------------------------
+    // @docs: typescriptlang.org/tsconfig/#target
+    // @note: all targets defined in top/header comment
+    "target": "esnext",
+
+    // Lib (type definitions for built-in JS APIs)
+    // -------------------------------
+    // @docs: typescriptlang.org/tsconfig/#lib
+    // @note: all lib(s) defined in top/header comment
+    "lib": ["esnext"],
+
+    // JSX (how JSX constructs are emitted)
+    // -------------------------------
+    // @docs: typescriptlang.org/tsconfig/#jsx
+    // @note: related opts (jsxFactory, jsxFragmentFactory, jsxImportSource, reactNamespace)
+    // @opts:
+    //  + react-jsx: Emit .js with JSX changed to _jsx calls optimized for production
+    //  + react-jsxdev: Emit .js with JSX changed to _jsx calls for development only
+    //  + preserve: Emit .jsx with the JSX unchanged
+    //  + react-native: Emit .js with the JSX unchanged
+    //  + react: Emit .js with JSX changed to the equivalent React.createElement calls
+    "jsx": "preserve",
+
+    // Misc. Language & Environment
+    // -------------------------------
+    // what module specifiers are considered module references (if file is script or module)
+    // @docs: typescriptlang.org/tsconfig/#moduleDetection
+    // @opts: auto, legecy, force
+    "moduleDetection": "auto",
+    // enable stage 3 decorator support (available since Typescript 5.0)
+    // @docs: typescriptlang.org/docs/handbook/decorators.html
+    //      : github.com/tc39/proposal-decorators
+    "experimentalDecorators": true,
+    // emit type metadata for decorators that work with reflect-metadata
+    // @docs: typescriptlang.org/tsconfig/#emitDecoratorMetadata
+    "emitDecoratorMetadata": true,
+
+
+    // 7:Emit
+    // @docs: typescriptlang.org/tsconfig/#Emit_6246
+    // -------------------------------------------------------------------------
+    // do not emit compiler output
+    // @note: bun compiles our code not tsc - so we don't want to 'emit' an output
+    "noEmit": true,
+    // omit declarations (d.ts) with an '@internal' annotation in the JSDoc comment
+    // @docs: typescriptlang.org/tsconfig/#stripInternal
+    "stripInternal": true,
+    // preserve enum declarations in output (enums are generally not recommended)
+    // @docs: typescriptlang.org/tsconfig/#preserveConstEnums
+    "preserveConstEnums": true,
+    // generate type declarations (.d.ts)
+    // @note: bun-make handles declarations via 'tsconfig.types.json'
+    // @docs: typescriptlang.org/tsconfig/#declaration
+    "declaration": false,
+    // generate source map for .d.ts (.d.ts.map) to map back to .ts source file;
+    // allows editors/lsp to 'Go to Definition' and work with project references
+    // @docs: typescriptlang.org/tsconfig/#declarationMap
+    // @note: enabled via --declarationMap in the Makefile
+    "declarationMap": false,
+
+
+    // 8:Interop Constraints
+    // @docs: typescriptlang.org/tsconfig/#Interop_Constraints_6252
+    // -------------------------------------------------------------------------
+    // fix problems in transpiled ts code
+    "esModuleInterop": true,
+    // case sensitive filenames (a windows thang)
+    "forceConsistentCasingInFileNames": true,
+    // forces distinction between type/plain imports/exports
+    "verbatimModuleSyntax": true,
+    // ensure files can be transpiled without other imports
+    "isolatedModules": true,
+    // @note: worth using/looking into for better sufficient type annotation on exports,
+    //      : but 'allowJs' must be false (why it's disabled: flexibility > types)
+    // @docs: typescriptlang.org/docs/handbook/release-notes/typescript-5-5.html#isolated-declarations
+    "isolatedDeclarations": false,
+
+
+    // 9:JavaScript Support
+    // @docs: typescriptlang.org/tsconfig/#JavaScript_Support_6247
+    // -------------------------------------------------------------------------
+    "allowJs": true,
+
+
+    // 10:Type Checking
+    // @docs: typescriptlang.org/tsconfig/#Type_Checking_6248
+    // -------------------------------------------------------------------------
+    "allowUnreachableCode": false,      // error when unreachable code is detected
+    "allowUnusedLabels": false,         // error when unused labels are detected
+    "exactOptionalPropertyTypes": true, // interpret optional property types as written
+    "noFallthroughCasesInSwitch": true, // error when a switch case falls through
+    "noImplicitAny": true,              // error on implied 'any' (expressions/declarations)
+    "noImplicitReturns": true,          // error if not all function code paths return
+    "noPropertyAccessFromIndexSignature": true, // error on 'dot' obj.key properties (unless defined)
+    "noUncheckedIndexedAccess": true,   // include 'undefined' in index signature
+    "noUnusedLocals": true,             // error if local variables are never used
+    "noUnusedParameters": true,         // error if parameters are never used
+    "strict": true,                     // enable all strict type checking options
+    "strictBindCallApply": true,        // check args for 'bind/call/apply' match the original
+    "strictBuiltinIteratorReturn": true,// built-ins instantiated with 'undefined' TReturn type
+    "strictFunctionTypes": true,        // disable bivariant function parameter checking
+    "strictNullChecks": true,           // type takes 'null' and 'undefined' into account
+    "strictPropertyInitialization": true, // error on class properties not set in constructor
+    "useUnknownInCatchVariables": true, // default catch clause variables as 'unknown'
+    // only type-check library/functionality used in the code (completeness)
+    // @docs: typescriptlang.org/tsconfig/#skipLibCheck
+    //      : typescriptlang.org/docs/handbook/release-notes/typescript-4-5.html#supporting-lib-from-node_modules
+    // @note: good idea to disable if hand-writing .d.ts files
+    "skipLibCheck": true
+  },
+
+  // ---------------------------------------------------------------------------
+  // 11:References (a way to structure your TypeScript programs into smaller pieces)
+  // @docs: typescriptlang.org/tsconfig/#references
+  //      : typescriptlang.org/docs/handbook/project-references.html
+  "references": [],
+
+  // ---------------------------------------------------------------------------
+  // 12:Watch Options
+  // @docs: typescriptlang.org/tsconfig/#watch-options
+  "watchOptions": {
+    "watchFile": "useFsEvents", // use native file system events for files and directories
+    "watchDirectory": "useFsEvents",
+    "fallbackPolling": "dynamicpriority", // dynamic queue/checked modified files more
+    "synchronousWatchDirectory": true, // don't coalesce watch notification
+    "excludeDirectories": ["dist/*", "**/node_modules", "**/temp", "**/testBin"],
+    "excludeFiles": []
+  },
+
+  // ---------------------------------------------------------------------------
+  // 13:Type Acquisition (automatic/background type download outside of node_modules)
+  // @docs: typescriptlang.org/tsconfig/#type-acquisition
+  // @note: only important/relevant for pure JavaScript projects
+  "typeAcquisition": {
+    "enable": false
+  },
+
+  // ---------------------------------------------------------------------------
+  // 14:$schema
+  // @note: configuration schema/reference for validation/IntelliSense;
+  //        not strictly part of tsconfig.json but used by external tools
+  "$schema": "http://json.schemastore.org/tsconfig"
+}

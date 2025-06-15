@@ -1,0 +1,36 @@
+{
+  "name": "comment-directive",
+  "version": "1.0.0",
+  "description": "A text preprocessor that uses comments as conditional directives",
+  "keywords": [ "comments", "conditional", "directives", "text", "preprocessor", "isomorphic" ],
+  "homepage": "https://github.com/fetchTe/comment-directive",
+  "license": "MIT",
+  "files": [ "dist" ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {"require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }, "import": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" } },
+    "./index": {"require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }, "import": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" } },
+    "./lang": {"require": { "types": "./dist/lang.d.cts", "default": "./dist/lang.cjs" }, "import": { "types": "./dist/lang.d.mts", "default": "./dist/lang.mjs" } }
+  },
+  "scripts": { "build": "make build","test": "make test" },
+  "dependencies": {},
+  "devDependencies": {
+    "@eslint/js": "9.29.0",
+    "@stylistic/eslint-plugin": "4.4.1",
+    "@types/bun": "1.2.16",
+    "@types/eslint": "9.6.1",
+    "@types/node": "24.0.1",
+    "@typescript-eslint/parser": "8.34.0",
+    "eslint": "9.29.0",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.34.0"
+  },
+  "author": { "name": "te","email": "git@fetchTe.com","url": "https://fetchTe.com" },
+  "bugs": { "url": "https://github.com/fetchTe/comment-directive/issues" },
+  "repository": { "type": "git", "url": "git+https://github.com/fetchTe/comment-directive.git" },
+  "engines": { "node": ">=10.24.0" },
+  "publishConfig": { "access": "public" }
+}

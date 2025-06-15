@@ -1,0 +1,11 @@
+/**                                                                       @about
+@desc: Config used to build TypeScript .d.{ts,mts,cts} type declarations,
+       for annotated prop info, reference: ./tsconfig.json.
+@idea: it would be nice to remove this config but unfortunately, 'tsc' CLI lacks
+       an exclude option (github.com/microsoft/TypeScript/issues/46005)
+>    : make build_declarations
+***                                                                           */
+{
+  "extends": "./tsconfig.json",
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/testBin"]
+}

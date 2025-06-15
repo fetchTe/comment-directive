@@ -1,0 +1,421 @@
+#------------------------------------------------------------------------------#
+# .editorconfig: code's mise en place
+# @docs        : spec.editorconfig.org
+# @desc        : defines code format/style guidelines with native support (editorconfig.org/#pre-installed)
+# @note        : uses lang recommended, else, source of authority (Google, Microsoft, etc.)
+# @more        : the 'where' of 80/chars  -> exple.tive.org/blarg/2019/10/23/80x25
+#              : the 'why' of 80/chars    -> laprade.blog/80-char-line-limit
+#              : the 'kernel' of 80/chars -> kernel.org/doc/html/v4.14/process/coding-style.html#breaking-long-lines-and-strings
+#              : the 'linus' not of 80/chars -> lkml.org/lkml/2020/5/29/1038
+#              : 125 maximum number of chars you can see in a GitHub diff view
+#------------------------------------------------------------------------------#
+#             1:default
+#             2:code/web
+#             3:code/srv
+#             4:configuration
+#             5:database
+#             6:style
+#             7:template
+#             8:text
+#             9:special
+#            10:non-spec rules
+#------------------------------------------------------------------------------#
+# top-most .editorconfig file
+root = true
+
+
+#------------------------------------------------------------------------------#
+# 1:default
+#------------------------------------------------------------------------------#
+[*]
+charset = utf-8
+# consistent line endings (LF for Linux/macOS, CRLF for Windows in specific cases)
+end_of_line = lf
+# ensure files end with a newline character
+insert_final_newline = true
+# default indentation size
+indent_size = 2
+# spaces for indentation as per web standards and general best practices
+indent_style = space
+# remove trailing whitespace to avoid unnecessary diffs with a bunch of EOL changes
+trim_trailing_whitespace = true
+
+
+#------------------------------------------------------------------------------#
+# 2:code/web
+#------------------------------------------------------------------------------#
+# AppleScript - developer.apple.com/library/archive/documentation/AppleScript/Conceptual/AppleScriptLangGuide/introduction/ASLR_intro.html
+[*.{applescript,scpt,scptd}]
+max_line_length = 80
+# Coffee - coffeescript.org
+#        - github.com/polarmobile/coffeescript-style-guide#tabs-or-spaces
+[*.coffee]
+max_line_length = 79
+# Dart - dart.dev/tools/dart-format
+[*.{dart}]
+max_line_length = 80
+# Elm - elm-lang.org/docs/style-guide
+[*.{elm}]
+max_line_length = 80
+# Gleam - gleam.run
+[*.{gleam}]
+max_line_length = 80
+# JavaScript/TypeScript with Markup - (JSX/React, Vue, Svelte, Astro, HTMX)
+[*.{astro,ctsx,htmx,jsx,mtsx,svelte,tsx,vue}]
+max_line_length = 100
+trim_trailing_whitespace = false
+# JavaSript - google.github.io/styleguide/jsguide.html#formatting-block-indentation
+#           - github.com/airbnb/javascript#whitespace
+[*.{cjs,es6,js,jsm,mjs}]
+max_line_length = 80
+# PureScript - purescript.org
+#            - github.com/ianbollinger/purescript-style-guide/blob/master/purescript-style.md
+[*.purs]
+max_line_length = 80
+# ReasonML - reasonml.github.io
+[*.{re,rei}]
+max_line_length = 80
+# ReScript - rescript-lang.org
+[*.{res}]
+max_line_length = 80
+# TypeScript - github.com/Microsoft/TypeScript/wiki/Coding-guidelines#style
+[*.{cts,mts,ts}]
+max_line_length = 80
+
+
+#------------------------------------------------------------------------------#
+# 3:code/srv
+#------------------------------------------------------------------------------#
+# ATS/Applied Type System - ats-lang.org
+[*.{ats,dats,hats,sats}]
+max_line_length = 80
+# Batch Files (Windows) - CRLF line endings for compatibility
+[*.{bat,cmd}]
+end_of_line = crlf
+max_line_length = 80
+# C/C++ - google.github.io/styleguide/cppguide.html#Spaces_vs._Tabs
+#       - google.github.io/styleguide/cppguide.html#Line_Length
+[*.{c,cc,cpp,cxx,h,hpp,hxx,inl}]
+continuation_indent_size = 4
+indent_size = 4
+max_line_length = 80
+# C# - google.github.io/styleguide/csharp-style.html#whitespace-rules
+#    - learn.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/coding-conventions#style-guidelines
+[*.{cs,csx}]
+continuation_indent_size = 4
+indent_size = 2
+max_line_length = 100
+# Clojure - clojuredocs.org/examples-styleguide#indentation-formatting
+#         - github.com/bbatsov/clojure-style-guide?tab=readme-ov-file#80-character-limits
+[*.{clj,cljc}]
+max_line_length = 80
+# Elixir - github.com/christopheradams/elixir_style_guide?tab=readme-ov-file#whitespace
+[*.{ex,exs}]
+max_line_length = 98
+# Erlang - docs.lfe.io/current/style-guide/3.html
+[*.{erl,hrl,lfe}]
+indent_size = 2
+max_line_length = 80
+# F# - learn.microsoft.com/en-us/dotnet/fsharp/style-guide/formatting#use-spaces-not-tabs
+[*.fs]
+indent_size = 4
+max_line_length = 80
+# Go - go.dev/doc/effective_go#formatting
+[{go.mod,go.sum,*.go}]
+indent_style = tab
+max_line_length = 100
+# Haskell - gitlab.haskell.org/ghc/ghc/-/wikis/commentary/coding-style#15-tabs-vs-spaces
+#         - cs.umd.edu/class/spring2023/cmsc433/Haskell_Style_Guide.html#(part._80-column_lines)
+[*.{hs,lhs}]
+max_line_length = 80
+# Java  - google.github.io/styleguide/javaguide.html#s4.2-block-indentation
+#       - github.com/twitter/commons/blob/master/src/java/com/twitter/common/styleguide.md#indent-style
+[*.{java,jsp,jspf,tag,tld}]
+continuation_indent_size = 4
+indent_size = 2
+max_line_length = 100
+# Kotlin - kotlinlang.org/docs/coding-conventions.html#indentation
+[*.{kt,kts}]
+indent_size = 4
+tab_width = 4
+max_line_length = 120
+# Groovy - groovy-lang.org/syntax.html
+[*.{groovy}]
+indent_size = 4
+max_line_length = 120
+# Lua - lua-users.org/wiki/LuaStyleGuide
+#     - roblox.github.io/lua-style-guide/
+#     - docs.luanti.org/engine-dev-process/lua-code-style-guidelines/
+[*.{lua}]
+max_line_length = 120
+# Lisp - lisp-lang.org/style-guide
+[*.{asd,cl,el,lisp,lsp}]
+max_line_length = 100
+# Nim - nim-lang.github.io/Nim/intern.html#coding-guidelines
+#     - nim-lang.github.io/Nim/nep1.html
+[*.{nim,nimble,nims}]
+max_line_length = 100
+# Ocaml - github.com/ocaml/opam/blob/master/.ocplint
+[*.{ml,mli}]
+max_line_length = 80
+# PSR-2 - www.php-fig.org/psr/psr-2/#overview (120 is soft limit / aim for 80)
+[*.{inc,module,pear,php,php4,php5,phtml}]
+indent_size = 4
+max_line_length = 120
+# Perl - perldoc.perl.org/perlstyle
+[*.{pl}]
+indent_size = 4
+max_line_length = 80
+# Prolog - arxiv.org/pdf/0911.2899
+[*.{pro,prolog}]
+indent_size = 4
+max_line_length = 80
+# Python - peps.python.org/pep-0008/#indentation
+#        - peps.python.org/pep-0008/#maximum-line-length
+[*.{cpy,pxd,pxi,pyx,py,pyw,rpy,wsgi}]
+continuation_indent_size = 4
+indent_size = 4
+max_line_length = 79
+# Racket - cs.brown.edu/courses/cs017/content/docs/racket-style.pdf
+[*.{plt,rkt,rktd}]
+max_line_length = 100
+# Ruby - github.com/airbnb/ruby/blob/main/rationales.md#line-length
+[*.{rb,ruby,ru}]
+max_line_length = 100
+# Rust - rust-lang.github.io/rustfmt/?version=v1.8.0&search=#tab_spaces
+#      - github.com/rust-lang/rust/blob/master/.editorconfig
+[*.rs]
+indent_size = 4
+max_line_length = 100
+# Scala - docs.scala-lang.org/style/indentation.html#line-wrapping
+#       - alexn.org/blog/2023/11/08/in-scala-3-use-4-spaces-for-indentation
+#       - Scala 3 style guide recommends 2 spaces, older style 4
+[*.{sbt,sc,scala}]
+continuation_indent_size = 4
+indent_size = 2
+max_line_length = 80
+# Scheme - mumble.net/~campbell/scheme/style.txt
+[*.{scm,ss}]
+max_line_length = 80
+# Swift - google.github.io/swift
+#       - github.com/linkedin/swift-style-guide
+[*.swift]
+indent_size = 4
+max_line_length = 120
+# Shell - google.github.io/styleguide/shellguide.html#line-length-and-long-strings
+[*.{bash,csh,fish,ksh,shell,sh,tcsh,zsh}]
+max_line_length = 80
+# Shell/configuration files (rc)
+[*.{bashrc,cshrc,kshrc,rc,tcshrc,zshenv,zshrc}]
+max_line_length = 80
+# Shell/misc
+[*.{aliases,bash_aliases,bash_profile,login,logout,profile,zlogin,zlogout}]
+max_line_length = 80
+# Zig - ziglang.org/documentation/master/#Whitespace
+[*.zig]
+indent_size = 4
+max_line_length = 100
+
+
+#------------------------------------------------------------------------------#
+# 4:configuration
+#------------------------------------------------------------------------------#
+# CMake - cmake.org/cmake/help/book/mastering-cmake/chapter/Writing CMakeLists Files.html
+[{CMakeLists.txt,*.cmake}]
+max_line_length = 100
+# diff - wikipedia.org/wiki/Diff
+#      - wiki.mercurial-scm.org/PatchFile
+[*.{diff,patch}]
+charset = unset
+end_of_line = unset
+indent_size = unset
+indent_style = unset
+insert_final_newline = false
+max_line_length = unset
+trim_trailing_whitespace = false
+# Docker - docs.docker.com/contribute/style/formatting (indent code blocks by 3 spaces)
+#        - docs.docker.com/build/building/best-practices
+[{Dockerfile,*.dockerfile}]
+indent_size = 2
+max_line_length = 80
+[docker-compose*.{yaml,yml}]
+indent_size = 2
+max_line_length = 80
+# htaccess (line-based) - httpd.apache.org/docs/2.4/howto/htaccess.html
+[.htaccess]
+indent_size = 4
+# Dot/configs
+[.{editorconfig,gitattributes,gitmodules}]
+max_line_length = 80
+# Dot/ignore(s)
+[.{dockerignore,eslintignore,gitignore,npmignore,prettierignore,stylelintignore}]
+max_line_length = 80
+# JSON - javascript.crockford.com/code.html#indentation (but not w/ 4 indent)
+[*.{geojson,json,json5,jsonc,webmanifest}]
+max_line_length = 80
+# JSON-dot/config
+[.{babelrc,bowerrc,eslintrc,jshintrc,jslintrc}]
+max_line_length = 80
+# Make - www.gnu.org/software/make/manual/html_node/Recipe-Syntax.html
+#      - openjdk.org/groups/build/doc/code-conventions.html
+[{Makefile,makefile,*.Makefile,*.mk}]
+# !REQUIRED! -> it's a no-space zone
+indent_style = tab
+max_line_length = 80
+tab_width = 8
+# Property-list (mac/XML-like) - wikipedia.org/wiki/Property_list
+[*.plist]
+continuation_indent_size = 2
+indent_size = 2
+max_line_length = 120
+# Ruby/rake - github.com/ruby/rake
+[*.{rake}]
+max_line_length = 100
+# Ruby/spec - guides.rubygems.org/specification-reference
+[*.{gemspec,podspec}]
+max_line_length = 100
+# Terraform - developer.hashicorp.com/terraform/language/style
+[*.{tf,tfvars}]
+indent_size = 2
+max_line_length = 120
+# Toml - github.com/toml-lang/toml#example
+[*.{cfg,conf,ini,toml}]
+max_line_length = 80
+# Yaml - yaml.org/spec/1.1/#id871998
+#      - docs.saltproject.io/en/3006/topics/troubleshooting/yaml_idiosyncrasies.html
+[*.{feature,yaml,yml}]
+indent_size = 2
+max_line_length = 80
+trim_trailing_whitespace = false
+
+
+#------------------------------------------------------------------------------#
+# 5:database
+#------------------------------------------------------------------------------#
+# www.sqlstyle.guide/#white-space
+# docs.sqlfluff.com/en/0.6.1/indentation.html
+# gist.github.com/mattmc3/38a85e6a4ca1093816c08d4815fbebfb#file-modern_sql_style_guide-md
+[*.{cql,db,ddl,dql,mysql,pgsql,sqlite,sql,tsql}]
+indent_size = 4
+max_line_length = 80
+
+
+#------------------------------------------------------------------------------#
+# 6:style
+#------------------------------------------------------------------------------#
+# CSS - google.github.io/styleguide/htmlcssguide.html#Indentation
+[*.{css,less,pcss,postcss,sass,scss,styl,stylus}]
+max_line_length = 80
+
+
+#------------------------------------------------------------------------------#
+# 7:template
+#------------------------------------------------------------------------------#
+# Angular - angularjs.org
+#         - google.github.io/styleguide/angularjs-google-style.html
+[*.{ng,tpl}]
+max_line_length = 100
+trim_trailing_whitespace = false
+# Angular - angularjs.org
+[*.component.html]
+max_line_length = 100
+trim_trailing_whitespace = false
+# Asp.net/Active Server Page
+[*.{ascx,ashx,asmx,asp,aspx,aspx.cs,aspx.vb,axd,master}]
+max_line_length = 100
+trim_trailing_whitespace = false
+# Common Workflow Language - www.commonwl.org/v1.2/index.html
+[*.cwl]
+max_line_length = 80
+trim_trailing_whitespace = false
+# Haml (nest-based) - github.com/haml/haml
+[*.{haml}]
+max_line_length = 80
+trim_trailing_whitespace = false
+# Handlebars/Mustache - handlebarsjs.com
+[*.{handlebars,hbs,mustache}]
+max_line_length = 80
+trim_trailing_whitespace = false
+# HTML - google.github.io/styleguide/htmlcssguide.html
+[*.{htm,html,xhtml}]
+max_line_length = 100
+trim_trailing_whitespace = false
+# Laravel blade - laravel.com/docs/11.x  (docs uses 4 spaces in all examples)
+[*.blade.php]
+indent_size = 4
+max_line_length = 100
+# Pug (nest-based) - pugjs.org
+[*.{jade,pug}]
+max_line_length = 80
+trim_trailing_whitespace = false
+# Ruby template/html - github.com/ruby/erb
+[*.{erb,rhtml}]
+max_line_length = 80
+trim_trailing_whitespace = false
+# Twig - twig.sensiolabs.org/doc/2.x/coding_standards.html
+[*.{html.twig,twig,xml.twig}]
+max_line_length = 80
+trim_trailing_whitespace = false
+# XML - google.github.io/styleguide/xmlstyle.html
+#     - not specified, but xml/svg tends to be unruly, long, and best left alone
+[*.{svg,xlf,xml,xml.dist,xsd,xsl,xslt,xul}]
+max_line_length = unset
+trim_trailing_whitespace = false
+# XML-based (group #1)  - lenient formatting
+[*.{csproj,pom,rss,xcscheme,storyboard,vcxproj,vbproj,wsdl}]
+max_line_length = unset
+trim_trailing_whitespace = false
+# XML-based (group #2)  - lenient formatting
+[*.{config,nuspec,props,resx,ruleset,stylecop,targets,vsct,vsixmanifest}]
+max_line_length = unset
+trim_trailing_whitespace = false
+
+
+#------------------------------------------------------------------------------#
+# 8:text
+#------------------------------------------------------------------------------#
+# markdown - docs.gitlab.com/ee/development/documentation/styleguide/#line-length
+[*.{md,markdown,mkd,mdx,mdwn}]
+max_line_length = 80
+trim_trailing_whitespace = false
+# Rich Text Format (rip. 2008) - wikipedia.org/wiki/Rich_Text_Format
+[*.{rtf}]
+max_line_length = 80
+trim_trailing_whitespace = false
+# reStructuredText - docutils.sourceforge.io/docs/ref/rst/restructuredtext.html
+[*.{rst}]
+indent_size = 3
+max_line_length = 80
+trim_trailing_whitespace = false
+# R Markdown - devguide.python.org/documentation/markup
+[*.{Rmd}]
+indent_size = 3
+max_line_length = 80
+trim_trailing_whitespace = false
+# text - leave formatting as is
+[*.{txt}]
+charset = unset
+end_of_line = unset
+indent_size = unset
+insert_final_newline = false
+max_line_length = unset
+trim_trailing_whitespace = false
+
+
+#------------------------------------------------------------------------------#
+# 9:special
+#------------------------------------------------------------------------------#
+# Commit messages - follow conventional commit standards
+[COMMIT_EDITMSG]
+max_line_length = 72
+# Version files - often auto-generated, no final newline might be intentional
+[VERSION]
+insert_final_newline = false
+
+
+#------------------------------------------------------------------------------#
+# 10:non-spec rules
+# @note: Omitted, but there are a number of custom csharp_* & dotnet_* worth a look
+# c#   - learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/style-rules/csharp-formatting-options
+# .net - learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/style-rules/dotnet-formatting-options
+#------------------------------------------------------------------------------#
