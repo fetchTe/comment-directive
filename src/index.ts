@@ -36,6 +36,7 @@ const DEFAULT_OPTIONS: CommentOptionsR = {
   identifier: '###[IF]',
   single: [/\s*\/\/\s*/, null],
   // eating the space before the comment makes it easier to work with inline-comments
+  disableCache: false,   // if memory is a concern in absurd/extream use cases (default: false)
   multi: [/\s*\/\*/, /\*\//],
 };
 
@@ -59,6 +60,8 @@ export type CommentOptions = {
   escape?: boolean;
   /* the acutal comment directive identifier (default: '###[IF]') */
   identifier?: string;
+  /* if memory is a concern while processing huge/many different directives (default: false) */
+  disableCache?: boolean;
 };
 
 type CommentOptionsR = {
@@ -295,23 +298,29 @@ const parseLineCount = (param: string, def = 1): {count: number; param: string;}
 
 
 /**
- * action directive  parser
- * @param  {string} spec
- * @param  {CommentOptionsR} options
+ * parses and caches an action spec string like 'rm=4L' into an action
+ * @param  {string} spec             - action specification
+ * @param  {CommentOptionsR} options - comment options
  * @return {Actions | null}
+ * @internal
  */
 const parseAction = (() => {
-  // strict equality cache based on options - option Map/WeakMap not worth overhead
-  const cache = new Map<string, Actions | null>();
+  // good perf gain, but it could lead to memory issues in absurd/extream use cases
+  let cache: null | Map<string, Actions | null>  = null;
+  // strict equality cache dump based on options - WeakMap not worth the overhead
   let lastOptions: CommentOptionsR | null = null;
   return (spec: string, options: CommentOptionsR): Actions | null => {
+    if (!cache && !options.disableCache) {
+      cache = new Map<string, Actions | null>();
+    }
     // clear cache if options changed
-    if (lastOptions !== options) {
+    if (cache && lastOptions !== options) {
       cache.clear();
       lastOptions = options;
+      cache = options.disableCache ? null : cache;
     }
     // check cache
-    if (cache.has(spec)) { return cache.get(spec)!; }
+    if (cache && cache.has(spec)) { return cache.get(spec)!; }
 
     let split: null | [string, string] = null;
     for (const iact of ACT_PREFIXS) {
@@ -330,7 +339,7 @@ const parseAction = (() => {
     // remove X lines
     if (act === 'rm' && (param.startsWith('line') || (/^\d+L$/).test(param))) {
       const result = { type: ACT_MAP.rml, count: parseLineCount(param).count };
-      cache.set(spec, result);
+      cache && cache.set(spec, result);
       return result;
     }
 
@@ -344,7 +353,7 @@ const parseAction = (() => {
       }
       // @note -> count is passed, but not implemented, probs not worth effort/overhead
       const result = { type: atype, count: parseLineCount(param).count };
-      cache.set(spec, result);
+      cache && cache.set(spec, result);
       return result;
     }
 
@@ -376,7 +385,7 @@ const parseAction = (() => {
       const result = {
         val, type: ACT_MAP[act as ActsSeq], count, stop,
       };
-      cache.set(spec, result);
+      cache && cache.set(spec, result);
       return result;
     }
 
@@ -448,7 +457,7 @@ const parseAction = (() => {
       const result = {
         type: ACT_MAP.sed, pattern, replacement, flags: flagChars, count, stop,
       };
-      cache.set(spec, result);
+      cache && cache.set(spec, result);
       return result;
     }
 
