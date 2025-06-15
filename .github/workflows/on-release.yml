@@ -1,0 +1,149 @@
+name: on-release
+
+env:
+  # release artifacts (adjust to fit your use; an empty string will disable)
+  #  > tars filename: bun-make.v1.0.2.tar.xz
+  ARTIFACTS   : '/tmp/tars/*.tar*,./dist/index.mjs,./dist/index.min.mjs,./dist/lang.mjs'
+  # set to '0' to disable commit links
+  LINK_COMMITS: 1
+  # set to '0' to consider all tags (otherwise tags must start with 'v')
+  SEMVER_ONLY : 1
+  # if/when no previous tag is found, like the first/inital tag
+  # if '0' and no previous tag found, will simply use an empty string
+  FALLBACK    : 1
+  FALLBACK_TAG: 'v0.0.0'
+  # set to '1' to enable action cache (perf/saving is negligible, if at all)
+  USE_CACHE   : 0
+  # release tmp file location
+  RELEASE_FILE: '/tmp/release.md'
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      # @required: by create_release_draft (github.com/ncipollo/release-action)
+      contents: write
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: bun::preheat-cache
+        if  : env.USE_CACHE == 1
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key : ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: bun::preheat-oven
+        uses: oven-sh/setup-bun@v2
+        with:
+          # version-opts: latest, canary, <sha>, <ver> (1.2.0)
+          bun-version: latest
+
+      # install deps
+      - name: make::install
+        run :  make install
+
+      # the 'make all' target does it all: clean, setup, build, lint, test, aok (the entire jamboree)
+      - name: make::all
+        run :  make all
+
+      - name: create::compressed archive
+        env:
+          CURRENT_TAG      : ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run : |
+          #!/bin/sh
+          NUK=$(printf '\033[0m')
+          CYN=$(printf '\033[0;36m')
+          repo=$(pwd)
+          echo "${CYN}[REPO] ${repo}${NUK}"
+          dpath="/tmp/tars/"
+          mkdir -p "${dpath}"
+          bname="$(basename "${GITHUB_REPOSITORY}")"
+          fname="${dpath}${bname}.${CURRENT_TAG}"
+          echo "${CYN}[FILE] ${fname}${NUK}"
+          printf "${CYN}%s%*s${NUK}\n" "[${fname}.tar]" 78 "" | tr " " "~"
+          tar --exclude='node_modules' -C "${repo}" -cvf "${fname}".tar .
+          printf "${CYN}%s%*s${NUK}\n" "[${fname}.tar.gz]" 75 "" | tr " " "~"
+          tar --exclude='node_modules' -C "${repo}" -cvzf "${fname}".tar.gz .
+          printf "${CYN}%s%*s${NUK}\n" "[${fname}.tar.xz]" 75 "" | tr " " "~"
+          tar --exclude='node_modules' -C "${repo}" -cJf "${fname}".tar.xz .
+
+      - name: generate::release-notes
+        id  : generate_notes_notes
+        env:
+          CURRENT_TAG      : ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          #!/bin/sh
+          git config --global --add safe.directory /github/workspace
+          # this suppress an error occurred when the repository is a complete one
+          git fetch --prune --unshallow || true
+          NUK=$(printf '\033[0m')
+          YEL=$(printf '\033[0;33m')
+          CYN=$(printf '\033[0;36m')
+          gtag=""
+          grange="0"
+          if [ "${SEMVER_ONLY}" = "0" ]; then
+            gtag=$(git tag --sort=-v:refname --list "v*" | grep -v "^${CURRENT_TAG}\$" | head -n 1)
+          else
+            for ref in $(git for-each-ref --sort=-creatordate --format '%(refname)' refs/tags); do
+              tag="${ref#refs/tags/}"
+              [ "${tag}" = "${CURRENT_TAG}" ] && continue
+              echo "${tag}" | grep -Eq '^v?([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?(\+[0-9A-Za-z-]+)?$' && gtag="${tag}" && break
+            done
+          fi
+          if [ -z "${gtag}" ] && [ "${FALLBACK}" = "1" ]; then
+            gtag="${FALLBACK_TAG}"
+            printf "%s[WARN]%s No previous tag found... using full history\n" "${YEL}" "${NUK}"
+            grange=""
+          fi
+          if [ -n "${gtag}" ]; then
+            printf "%s[INFO]%s Comparing: %s%s..HEAD%s\n" "${CYN}" "${NUK}" "${CYN}" "${gtag}" "${NUK}"
+            grange="${gtag}..HEAD"
+          fi
+          if [ -n "${gtag}" ]; then
+            if [ "${LINK_COMMITS}" = "1" ]; then
+              printf "## [\`%s\`](https://github.com/%s/tree/%s)\n\n" "${CURRENT_TAG}" "${GITHUB_REPOSITORY}" "${CURRENT_TAG}" >"${RELEASE_FILE}"
+            else
+              printf "## \`%s\`\n\n" "${CURRENT_TAG}" >"${RELEASE_FILE}"
+            fi
+          fi
+          if [ "${grange}" != "0" ]; then
+            if [ "${LINK_COMMITS}" = "1" ]; then
+              git log --oneline "${grange}" | awk -v repo="${GITHUB_REPOSITORY}" '{print "* [\`" substr($1, 1, 7) "\`](https://github.com/" repo "/commit/" substr($1, 1, 7) ") " substr($0, 9)}' >>"${RELEASE_FILE}"
+            else
+              git log --oneline "${grange}" | sed 's/^/* /' >>"${RELEASE_FILE}"
+            fi
+            echo "${CYN}[DONE] out: ${RELEASE_FILE}${NUK}"
+            printf "${CYN}%s%*s${NUK}\n" "[OUT]" 85 "" | tr " " "~"
+            cat "${RELEASE_FILE}"
+            printf "${CYN}%s%*s${NUK}\n" "[OUT]" 85 "" | tr " " "~"
+          else
+            printf "%s[WARN]%s EMPTY release notes... no previous tag found and FALLBACK=0\n" "${YEL}" "${NUK}"
+            echo "" >"${RELEASE_FILE}"
+          fi
+
+      # create a create draft using the notes we generated in prv action
+      - name: create::release-draft
+        id  : create_release_draft
+        # @docs: https://github.com/ncipollo/release-action
+        uses: ncipollo/release-action@v1
+        env :
+          GITHUB_TOKEN     : ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        with:
+          artifacts: ${{env.ARTIFACTS}}
+          bodyFile : ${{env.RELEASE_FILE}}
+          draft    : true
+          name     : Release ${{ github.ref_name }}
