@@ -1,0 +1,78 @@
+#------------------------------------------------------------------------------#
+# @note: you may want to remove this action, it only runs if/when the makefile
+#        changes to make sure we POSIXy
+#------------------------------------------------------------------------------#
+name: on-makefile-change
+
+env:
+  # set to '1' to enable action cache (perf/saving is negligible, if at all)
+  USE_CACHE: 0
+  # ignore targets: grep --invert-match -E "${IGNORE_TARGET}"
+  IGNORE_TARGET: 'update|_watch'
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+    paths:
+      - Makefile
+  pull_request:
+    branches:
+      - master
+      - dev
+    paths:
+      - Makefile
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: bun::preheat-cache
+        if  : env.USE_CACHE == 1
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key : ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: bun::preheat-oven
+        uses: oven-sh/setup-bun@v2
+        with:
+          # version-opts: latest, canary, <sha>, <ver> (1.2.0)
+          bun-version: latest
+
+      - name: install::pdpmake
+        run : |
+          #!/bin/sh
+          git clone https://github.com/rmyorston/pdpmake pdpmake-src
+          cd pdpmake-src || exit
+          make
+          mkdir -p "${HOME}/.local/bin"
+          mv ./make "${HOME}/.local/bin/pdpmake"
+          echo "${HOME}/.local/bin" >>"${GITHUB_PATH}"
+          cd ..
+          rm -rf pdpmake-src
+
+      - name: make::install
+        run : pdpmake install
+
+      - name: make::build
+        run : pdpmake build
+
+      # ensures all make targets are aok and run
+      - name: make::run:all
+        run : |
+          #!/bin/sh
+          targets=$(awk --posix '/^[A-Za-z0-9_ -]*:.*##.*$/ {sub(/:.*/,"",$1); print $1}' ./Makefile | grep --invert-match -E "${IGNORE_TARGET}")
+          printf '%*s\n' 60 '' | tr ' ' '#'
+          echo "# TESTING FOLLOWING MAKE TARGETS"
+          echo "${targets}"
+          printf '%*s\n' 60 '' | tr ' ' '#'
+          echo "${targets}" | xargs pdpmake
