@@ -85,6 +85,7 @@ type CommentOptions = {
   loose?: boolean;          // allow directives on lines with other content (default: false)
   nested?: boolean;         // allow nested multi-line comments (default: false)
   disableCache?: boolean,   // if memory is a concern in absurd/extreme use cases (default: false)
+  throw?: boolean;          // throw on any error instead of logging and ignoring (default: false)
   // keep/preserve options
   keepDirective?: boolean;  // keep comment directive in output (default: false)
   keepEmpty?: boolean;      // keep/preserve removed empty comments/lines (default: false)
@@ -401,6 +402,7 @@ const DEFAULT_OPTIONS: CommentOptions = {
   loose: false,          // allow directives on lines with other content (default: false)
   nested: false,         // allow nested multi-line comments (default: false)
   disableCache: false,   // if memory is a concern in absurd/extreme use cases (default: false)
+  throw: false,          // throw on any error instead of logging and ignoring (default: false) 
   // keep/preserve options
   keepDirective: false,  // keep comment directive in output (default: false)
   keepEmpty: false,      // keep/preserve removed empty comments/lines (default: false)

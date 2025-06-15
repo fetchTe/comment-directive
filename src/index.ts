@@ -33,6 +33,7 @@ export const DEFAULT_OPTIONS: CommentOptionsR = {
   loose: false,          // allow directives on lines with other content (default: false)
   nested: false,         // allow nested multi-line comments (default: false)
   disableCache: false,   // if memory is a concern in absurd/extreme use cases (default: false)
+  throw: false,          // throw on any error instead of logging and ignoring (default: false)
   // keep/preserve options
   keepDirective: false,  // keep comment directive in output (default: false)
   keepEmpty: false,      // keep/preserve removed empty comments/lines (default: false)
@@ -58,6 +59,8 @@ export type CommentOptions = {
   nested?: boolean;
   /* if memory is a concern while processing huge/many different directives (default: false) */
   disableCache?: boolean;
+  /* throw on any error instead of logging and ignoring (default: false) */
+  throw?: boolean;
   /* escape regex patterns to match literal strings (default: true) */
   escape?: boolean;
   /* disable white-space logic when removing/uncommenting (default: false) */
@@ -367,7 +370,9 @@ const parseAction = (() => {
 
     const [act, param] = split ?? [];
     if (param === undefined) {
-      console.error(`[commentDirective:parseAction] bad/no action param: ${spec}`);
+      const err = `[commentDirective:parseAction] bad/no action param: ${spec}`;
+      if (options.throw) { throw new Error(err); }
+      console.error(err);
       return null;
     }
 
@@ -383,7 +388,9 @@ const parseAction = (() => {
       const atype = act === 'un' ? ACT_MAP.unc : act === 'rm' ? ACT_MAP.rmc : null;
       if (!atype) {
         // eslint-disable-next-line @stylistic/max-len
-        console.error(`[commentDirective:parseAction] 'comment' only works with 'rm' or 'un' - not '${act}': ${param}`);
+        const err = `[commentDirective:parseAction] 'comment' only works with 'rm' or 'un' - not '${act}': ${param}`;
+        if (options.throw) { throw new Error(err); }
+        console.error(err);
         return null;
       }
       // @note -> count is passed, but not implemented, probs not worth effort/overhead
@@ -414,7 +421,9 @@ const parseAction = (() => {
       if (endDeliIndex !== -1) { seq = seq.slice(0, endDeliIndex); }
       const val = seq;
       if (!val && act !== 'pop' && act !== 'shift') {
-        console.error(`[commentDirective:parseAction] no ${act} 'value' found: ${param}`);
+        const err = `[commentDirective:parseAction] no ${act} 'value' found: ${param}`;
+        if (options.throw) { throw new Error(err); }
+        console.error(err);
         return null;
       }
       const result = {
@@ -428,7 +437,9 @@ const parseAction = (() => {
     if (act === 'sed') {
       const delimiter = options?.delimiter ?? '/';
       if (!param.startsWith(delimiter)) {
-        console.error(`[commentDirective:parseAction] bad sed syntax: ${param}`);
+        const err = `[commentDirective:parseAction] bad sed syntax: ${param}`;
+        if (options.throw) { throw new Error(err); }
+        console.error(err);
         return null;
       }
 
@@ -459,13 +470,17 @@ const parseAction = (() => {
       }
 
       if (parts.length < 3) {
-        console.error(`[commentDirective:parseAction] bad sed syntax, not enough parts: ${param}`);
+        const err = `[commentDirective:parseAction] bad sed syntax, not enough parts: ${param}`;
+        if (options.throw) { throw new Error(err); }
+        console.error(err);
         return null;
       }
 
       const [pattern, replacement, meta] = parts;
       if (!isString(pattern) || !isString(replacement)) {
-        console.error(`[commentDirective:parseAction] bad sed match: ${param}`);
+        const err = `[commentDirective:parseAction] bad sed match: ${param}`;
+        if (options.throw) { throw new Error(err); }
+        console.error(err);
         return null;
       }
 
@@ -496,7 +511,9 @@ const parseAction = (() => {
       return result;
     }
 
-    console.error(`[commentDirective:parseAction] unknown action: ${spec}`);
+    const err = `[commentDirective:parseAction] unknown action: ${spec}`;
+    if (options.throw) { throw new Error(err); }
+    console.error(err);
     return null;
   };
 })();
@@ -519,16 +536,22 @@ const parseDirective = (
   // condSpec is like "alt=1"
   const condMatch = condSpec?.split('=');
   if (!condMatch) {
-    console.error(`[commentDirective:parseDirective] no/bad condition match: ${line}`);
+    const err = `[commentDirective:parseDirective] no/bad condition match: ${line}`;
+    if (options.throw) { throw new Error(err); }
+    console.error(err);
     return null;
   }
   const [key, val] = condMatch;
   if (!key || val === undefined) {
-    console.error(`[commentDirective:parseDirective] bad condition key/value`, {key, val});
+    const err = `[commentDirective:parseDirective] bad key/value (${key}/${val}): ${line}`;
+    if (options.throw) { throw new Error(err); }
+    console.error(err);
     return null;
   }
   if (!ifTrue) {
-    console.error(`[commentDirective:parseDirective] missing required true condition: ${line}`);
+    const err = `[commentDirective:parseDirective] missing required true condition: ${line}`;
+    if (options.throw) { throw new Error(err); }
+    console.error(err);
     return null;
   }
   return {
@@ -941,8 +964,7 @@ export const commentDirective = (
         result[result.length - 1] += ';' + part;
       }
     }
-    // must have a condition and one action
-    if (result.length < 2) { return null; }
+    // must have a condition and one action - but we still rtn to report error
     return result;
   };
 
@@ -1017,7 +1039,6 @@ export const commentDirective = (
 
       if (dkeep) {
         out.push(directiveStack.length);
-        // console.log({directiveStack})
         directiveStack.push(line);
       } else if (loose) {
         // @ts-expect-error if loose we have to rm/hack the directive (should silce?)
@@ -1066,3 +1087,4 @@ export const commentDirective = (
 };
 
 export default commentDirective;
+
