@@ -1,0 +1,325 @@
+#------------------------------------------------------------------------------#
+# .gitignore: a code colander (the web/node edition)
+# @desc     : specifies which files Git should exclude/ignore from tracking
+# @docs     : www.kernel.org/pub/software/scm/git/docs/gitignore.html
+# @note     : covers most web/node & editor/OS/misc intricacies;
+#           : for other language specifics, see: github.com/github/gitignore
+# @debug/cli: git check-ignore -v *    (lists which files are being ignored)
+#------------------------------------------------------------------------------#
+#          1:build/project
+#          2:dependencies
+#          3:logs/coverage
+#          4:runtime
+#          5:cache/temp
+#          6:editors
+#          7:archives
+#          8:linux-y
+#          9:imac
+#         10:win98
+#         11:never-evers (pkcs/creds/certs/backups/dumps)
+#------------------------------------------------------------------------------#
+
+
+#------------------------------------------------------------------------------#
+# 1:build/project
+#------------------------------------------------------------------------------#
+## generic/project
+bin/
+build/
+dist/
+out/
+output/
+compile/
+## .env* are not necessarily private/secret; remove if relevant to commit
+*.env
+.env
+.env.*
+.envrc
+## misc
+**/testBin/
+
+
+#------------------------------------------------------------------------------#
+# 2:dependencies
+#------------------------------------------------------------------------------#
+.serverless/
+bower_components/
+jspm_packages/
+node_modules/
+web_modules/
+# yarn v2 - yarnpkg.com/getting-started/qa#which-files-should-be-gitignored
+.yarn/build-state.yml
+.yarn/install-state.gz
+.yarn/unplugged
+# '.pnp.*/.yarn/cache' may be safely ignored; if yarn zero-installs ref above url
+.pnp.*
+.yarn/cache
+
+
+#------------------------------------------------------------------------------#
+# 3:logs/coverage
+#------------------------------------------------------------------------------#
+## generic
+*.cover
+*.log
+.coverage
+.coverage.*
+clover.xml
+cobertura.xml
+cover
+cover.out
+coverage.xml
+coverage/
+htmlcov/
+logs/
+nosetests.xml
+## javascript
+.yarn-integrity
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+# diagnostic - nodejs.org/api/report.html
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+# jscover
+lib-cov
+# istanbul
+*.lcov
+.nyc_output/
+lcov-report/
+
+
+#------------------------------------------------------------------------------#
+# 4:runtime
+#------------------------------------------------------------------------------#
+*.pid
+*.pid.lock
+*.seed
+pids/
+
+
+#------------------------------------------------------------------------------#
+# 5:cache/temp
+#------------------------------------------------------------------------------#
+## generic
+*.cache
+*.cache-loader
+*.dev
+*.temp
+*.tmp
+tmp.*
+.*cache
+.cache/
+temp/
+tmp/
+## css
+.sass-cache/
+*.css.map
+*.sass.map
+*.scss.map
+## javascript/typescript
+.docusaurus
+.dynamodb/
+.eslintcache/
+.esm-cache
+.fusebox/
+.gatsby-cache/
+.grunt
+.parcel-cache/
+.stylelintcache
+.svelte-kit
+.webpack/
+# node-waf
+.lock-wscript
+# next.js/output
+.next
+.vercel
+# rollup
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+.swc/
+# tsc
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+## translations
+*.mo
+*.pot
+
+
+#------------------------------------------------------------------------------#
+# 6:editors
+#------------------------------------------------------------------------------#
+## eclipse
+.classpath
+.project
+.settings/
+## emacs/vim - swap/swap-y friends
+*.swp
+*.swo
+*.sw*
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+Session.vim
+# netrw file explorer/history
+.netrwhist
+# persistent undo files
+[._]*.un~
+## general tag files (ctags, etc)
+ctags
+tags
+tags.ref
+tags.test
+## intellij
+*.iml
+## jetbrains
+.idea/
+.idea.Rider/
+## kate
+.kateconfig
+*.kate-swp
+## metals (scala)
+metals.sbt
+## netbeans
+nbproject/private/
+## rstudio
+.Rproj.user/
+## sublime text (#1)
+*.sublime-project
+*.sublime-workspace
+.tern-port
+## textmate
+*.tmproj
+## visual studio/code
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.history/
+.vscode/
+.vscode-test
+# settings and cache directory (newer versions)
+.vs/
+# more build related but a vs specfic thang
+obj/
+## xcode
+*.xcworkspace/
+*.xcodeproj/
+project.xcworkspace/
+xcuserdata/
+DerivedData/
+## slickedit
+*.vpw
+*.vpwhist
+*.vpt
+
+
+#------------------------------------------------------------------------------#
+# 7:archives
+#------------------------------------------------------------------------------#
+*.7z
+*.jar
+*.rar
+*.zip
+*.gz
+*.bzip
+*.bzip2
+*.bz2
+*.xz
+*.lzma
+*.tar
+*.tgz
+
+
+#------------------------------------------------------------------------------#
+# 8:linux-y
+#------------------------------------------------------------------------------#
+*~
+# temporary files created if a process still has a handle open of a deleted file
+.fuse_hidden*
+# kde directory preferences
+.directory
+# might appear on any partition/disk
+.Trash-*
+# .nfs files are created when an open file is removed but is still being accessed
+.nfs*
+
+
+#------------------------------------------------------------------------------#
+# 9:imac
+#------------------------------------------------------------------------------#
+.DS_Store
+.AppleDouble
+.LSOverride
+# icon - stackoverflow.com/questions/17556250/how-to-ignore-icon-in-git/33974028#33974028
+Icon[\r]
+# thumbnails
+._*
+# files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+# directories potentially created on remote afp share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+
+#------------------------------------------------------------------------------#
+# 10:win98
+#------------------------------------------------------------------------------#
+# windows thumbnail cache files
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+# folder config file
+[Dd]esktop.ini
+# recycle bin used on file shares
+$RECYCLE.BIN/
+# windows installer files
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+# windows shortcuts
+*.lnk
+
+
+#------------------------------------------------------------------------------#
+# 11:never-evers (pkcs/creds/certs/backups/dumps)
+#------------------------------------------------------------------------------#
+*.cer
+*.cert
+*.crt
+*.csr
+*.der
+*.jks
+*.key
+*.keystore
+*.p12
+*.p7b
+*.p7c
+*.p7r
+*.pem
+*.pfx
+*.pkcs12
+*.pki
+*.ppk
+*.truststore
+## probs never
+*.backup
+*.dump
+*.stackdump
+# merge conflict
+*.orig
