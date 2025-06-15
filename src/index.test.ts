@@ -1507,12 +1507,12 @@ c value`;
 // @id::error handling
 // -----------------------------------------------------------------------------
 describe('error handling', () => {
-  const INVALID_SYNTAX_IN = `
-// ###[IF]invalid syntax here
-content`;
 
   test('invalid directive syntax is ignored', () => {
-    expect(commentDirective(INVALID_SYNTAX_IN, {})).toEqual(INVALID_SYNTAX_IN);
+    const input = `
+  // ###[IF]invalid syntax here
+  content`;
+    expect(commentDirective(input, {})).toEqual(input);
   });
 
 
@@ -1537,6 +1537,33 @@ old value`;
     expect(commentDirective(JS_WHITESPACE_IF_IN, { 'test ': 1 })).toEqual(JS_WHITESPACE_IF);
   });
 
+});
+
+
+describe('error handling - throw option enable', () => {
+  test('invalid directive syntax is ignored', () => {
+    expect(() => {
+      commentDirective(`
+    // ###[IF]invalid syntax here
+    content`, {}, {throw: true});
+    }).toThrow();
+  });
+
+  test('invalid remove lines syntax is ignored', () => {
+    expect(() => {
+      commentDirective(`// ###[IF]test=1;rm=invalid;
+line1
+line2`, { test: 1 }, {throw: true});
+    }).toThrow();
+  });
+
+  test('bad whitespace variations in directives', () => {
+    expect(() => {
+      commentDirective(`
+  //   ###[IF]  test = 1 ; sed = /old/new/ ;
+old value`, { test: 1 }, {throw: true});
+    }).toThrow();
+  });
 });
 
 
