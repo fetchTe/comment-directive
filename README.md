@@ -2,7 +2,7 @@
 
 A brutally effective text preprocessor that uses comments as conditional directives. No need for separate `.template` files, no overly complicated DSL; just comments that do useful work.
 
-> Well-tested, isomorphic, dependency-free, slices and dices lines: ~3,000/ms and ~2,000,000/s;<br/>
+> Well-tested, isomorphic, dependency-free, slices and dices lines: ~300/µs, ~3,000/ms, and ~3,000,000/s;<br/>
 > But, as with anything [`RegExp`](https://en.wikipedia.org/wiki/Regular_expression), it's more like a well-oiled chainsaw than a surgical blade
 
 
@@ -32,23 +32,24 @@ For example, replacing a string with an ENV variable is easy;
 Injecting an object function into an argument with an ENV variable, not so easy
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 // ###[IF]prod=1;un=comment;rm=comment;
-const aContrivedExample = (arg = [1,/* {aFn: () => ['dev']},*/ 2, 3]) => {
-  // ###[IF]prod=1;sed=/my.api.com/localhost/;
-  const str = 'https://my.api.com:3000'
+const anExample = (arg = [1,/* {aFn: () => ['dev']},*/ 2, 3]) => {
+  // ###[IF]prod=0;sed=/80/3000/;
+  // ###[IF]prod=1;sed=/dev.api.com/api.fun/;
+  const str = 'https://dev.api.com:80'
   return {str, arg};
 };
 
 
 /* @IF prod=1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-const aContrivedExample = (arg = [1, {aFn: () => ['dev']}, 2, 3]) => {
-  const str = 'https://localhost:3000'
+const anExample = (arg = [1, {aFn: () => ['dev']}, 2, 3]) => {
+  const str = 'https://api.fun:80'
   return {str, arg};
 };
 
 
 /* @IF prod=0 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-const aContrivedExample = (arg = [1, 2, 3]) => {
-  const str = 'https://my.api.com:3000'
+const anExample = (arg = [1, 2, 3]) => {
+  const str = 'https://dev.api.com:3000'
   return {str, arg};
 };
 ```

@@ -41,24 +41,37 @@ const aWellOiled = "chainsaw";`);
       .toEqual('console.log(\'rm if env=1; otherwise un-comment\');');
   });
 
-  test('contrived example prod=1', () => {
-    const input = `
+
+  const AN_EXAMPLE_INPUT = `
 // ###[IF]prod=1;un=comment;rm=comment;
-const aContrivedExample = (arg = [1,/* {aFn: () => ['dev']},*/ 2, 3]) => {
-  // ###[IF]prod=1;sed=/my.api.com/localhost/;
-  const str = 'https://my.api.com:3000'
+const anExample = (arg = [1,/* {aFn: () => ['dev']},*/ 2, 3]) => {
+  // ###[IF]prod=0;sed=/80/3000/;
+  // ###[IF]prod=1;sed=/dev.api.com/api.fun/;
+  const str = 'https://dev.api.com:80'
   return {str, arg};
 };`.trim();
 
-    expect(commentDirective(input, {prod: 1})).toEqual(`
-const aContrivedExample = (arg = [1, {aFn: () => ['dev']}, 2, 3]) => {
-  const str = 'https://localhost:3000'
+  const AN_EXAMPLE_PROD_1_EXPECTED = `
+const anExample = (arg = [1, {aFn: () => ['dev']}, 2, 3]) => {
+  const str = 'https://api.fun:80'
   return {str, arg};
-};`.trim());
+};`.trim();
+
+  const AN_EXAMPLE_PROD_0_EXPECTED = `
+const anExample = (arg = [1, 2, 3]) => {
+  const str = 'https://dev.api.com:3000'
+  return {str, arg};
+};`.trim();
+
+  test('contrived example prod=1', () => {
+    expect(commentDirective(AN_EXAMPLE_INPUT, { prod: 1 }))
+      .toEqual(AN_EXAMPLE_PROD_1_EXPECTED);
   });
 
   test('contrived example prod=0', () => {
-    const input = `
+    expect(commentDirective(AN_EXAMPLE_INPUT, { prod: 0 }))
+      .toEqual(AN_EXAMPLE_PROD_0_EXPECTED);
+  });
 // ###[IF]prod=1;un=comment;rm=comment;
 const aContrivedExample = (arg = [1,/* {aFn: () => ['dev']},*/ 2, 3]) => {
   // ###[IF]prod=1;sed=/my.api.com/localhost/;
