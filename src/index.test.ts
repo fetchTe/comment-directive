@@ -290,7 +290,7 @@ let⠐space⠐=⠐'keep';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐�
 // -----------------------------------------------------------------------------
 describe('sed', () => {
   // Single comment replace
-  const SED_SINGLE_IN = `
+  const SED_SINGLE_INPUT = `
     // ###[IF]is_any=1;sed=/ptag/cool/;
     export default ptag;`;
 
@@ -301,15 +301,17 @@ describe('sed', () => {
     export default cool;`;
 
   test('single comment replace - no match', () => {
-    expect(commentDirective(SED_SINGLE_IN, { is_any: 0 })).toEqual(SED_SINGLE_EXPECT_IF_FALSE);
+    expect(commentDirective(SED_SINGLE_INPUT, { is_any: 0 }))
+      .toEqual(SED_SINGLE_EXPECT_IF_FALSE);
   });
 
   test('single comment replace - match', () => {
-    expect(commentDirective(SED_SINGLE_IN, { is_any: 1 })).toEqual(SED_SINGLE_EXPECT_IF_TRUE);
+    expect(commentDirective(SED_SINGLE_INPUT, { is_any: 1 }))
+      .toEqual(SED_SINGLE_EXPECT_IF_TRUE);
   });
 
   // Multiple stacked directives
-  const SED_STACKED_IN = `
+  const SED_STACKED_INPUT = `
       // ###[IF]is_txt=0;sed=/txt.ptag/{#}tag.ptag{+}/;
       // ###[IF]is_txt=1;sed=/ptag/ptag{+}/;
       _css: cn().CSS.txt.ptag,`;
@@ -321,17 +323,17 @@ describe('sed', () => {
       _css: cn().CSS.txt.ptag{+},`;
 
   test('multiple stacked directives - first condition', () => {
-    expect(commentDirective(SED_STACKED_IN, { is_txt: 0 }))
+    expect(commentDirective(SED_STACKED_INPUT, { is_txt: 0 }))
       .toEqual(SED_STACKED_EXPECT_IF_TXT_FALSE);
   });
 
   test('multiple stacked directives - second condition', () => {
-    expect(commentDirective(SED_STACKED_IN, { is_txt: 1 }))
+    expect(commentDirective(SED_STACKED_INPUT, { is_txt: 1 }))
       .toEqual(SED_STACKED_EXPECT_IF_TXT_TRUE);
   });
 
   // Global sed replacement
-  const SED_GLOBAL_IN = `
+  const SED_GLOBAL_INPUT = `
     // ###[IF]debug=1;sed=/console/logger/g;
     console.log('test');
     console.warn('warning');
@@ -339,7 +341,7 @@ describe('sed', () => {
       console.error('error');
     }`;
 
-  const SED_GLOBAL_IF = `
+  const SED_GLOBAL_EXPECTED = `
     logger.log('test');
     logger.warn('warning');
     function test() {
@@ -347,11 +349,12 @@ describe('sed', () => {
     }`;
 
   test('global sed replacement', () => {
-    expect(commentDirective(SED_GLOBAL_IN, { debug: 1 })).toEqual(SED_GLOBAL_IF);
+    expect(commentDirective(SED_GLOBAL_INPUT, { debug: 1 }))
+      .toEqual(SED_GLOBAL_EXPECTED);
   });
 
   test('global sed replacement N lines', () => {
-    expect(commentDirective(`
+    const SED_GLOBAL_N_LINES_INPUT = `
     // ###[IF]deli=1;sed=###/###+###g1L;
     let maths = 1 / 2 / 3;
     let maths = 1 / 2 / 4;
@@ -360,34 +363,39 @@ describe('sed', () => {
     let maths = 1 / 2 / 6;
     let maths = 1 / 2 / 7;
     let maths = 1 / 2 / 8;
-    let maths = 1 / 2 / 9;`, {deli: 1}, {delimiter: '###'})).toEqual(`
+    let maths = 1 / 2 / 9;`;
+    const SED_GLOBAL_N_LINES_EXPECTED = `
     let maths = 1 + 2 + 3;
     let maths = 1 / 2 / 4;
     let maths = 1 + 2 + 5;
     let maths = 1 + 2 + 6;
     let maths = 1 / 2 / 7;
     let maths = 1 / 2 / 8;
-    let maths = 1 / 2 / 9;`);
+    let maths = 1 / 2 / 9;`;
+
+    expect(commentDirective(SED_GLOBAL_N_LINES_INPUT, { deli: 1 }, { delimiter: '###' }))
+      .toEqual(SED_GLOBAL_N_LINES_EXPECTED);
   });
 
   // Multiline sed replacement
-  const SED_MULTILINE_IN = `
+  const SED_MULTILINE_INPUT = `
     // ###[IF]mode=dev;sed=/old/new/2L;
     const old = 'value1';
     const old = 'value2';
     const old = 'value3';`;
 
-  const SED_MULTILINE_IF = `
+  const SED_MULTILINE_EXPECTED = `
     const new = 'value1';
     const new = 'value2';
     const old = 'value3';`;
 
   test('multiline sed replacement', () => {
-    expect(commentDirective(SED_MULTILINE_IN, { mode: 'dev' })).toEqual(SED_MULTILINE_IF);
+    expect(commentDirective(SED_MULTILINE_INPUT, { mode: 'dev' }))
+      .toEqual(SED_MULTILINE_EXPECTED);
   });
 
   // Nested sed
-  const NESTED_SED_IN = `
+  const NESTED_SED_INPUT = `
     // ###[IF]un=1;un=comment;
     // ###[IF]debug=1;sed=/WORK/YOLO/;
     // ###[IF]other=1;sed=/YOLO/POLO/;
@@ -395,7 +403,7 @@ describe('sed', () => {
     // console.log("THIS SHOULD WORK");
     console.log("pretty please");`;
 
-  const NESTED_SED_IN_ALT = `
+  const NESTED_SED_INPUT_ALT = `
     // ###[IF]other=1;sed=/WORK/POLO/;
     // ###[IF]other=1;sed=/POLO/YOLO/;
     // ###[IF]debug=1;sed=/YOLO/COLO/;
@@ -424,76 +432,91 @@ describe('sed', () => {
     console.log("pretty please");`;
 
   test('multiline sed - nested', () => {
-    expect(commentDirective(NESTED_SED_IN, { debug: 0 })).toEqual(NESTED_SED_EXPECT_ELSE);
-    expect(commentDirective(NESTED_SED_IN, { debug: 1 })).toEqual(NESTED_SED_EXPECT_IF_DEBUG);
-    expect(commentDirective(NESTED_SED_IN, { other: 1 })).toEqual(NESTED_SED_EXPECT_IF_OTHER);
-    expect(commentDirective(NESTED_SED_IN, { debug: 1, other: 1 }))
+    expect(commentDirective(NESTED_SED_INPUT, { debug: 0 }))
+      .toEqual(NESTED_SED_EXPECT_ELSE);
+
+    expect(commentDirective(NESTED_SED_INPUT, { debug: 1 }))
+      .toEqual(NESTED_SED_EXPECT_IF_DEBUG);
+
+    expect(commentDirective(NESTED_SED_INPUT, { other: 1 }))
+      .toEqual(NESTED_SED_EXPECT_IF_OTHER);
+
+    expect(commentDirective(NESTED_SED_INPUT, { debug: 1, other: 1 }))
       .toEqual(NESTED_SED_EXPECT_IF_DEBUG_OTHER);
-    expect(commentDirective(NESTED_SED_IN, {
+
+    expect(commentDirective(NESTED_SED_INPUT, {
       debug: 1, other: 1, un: 1,
     })).toEqual(NESTED_SED_EXPECT_IF_DEBUG_OTHER_UN);
   });
 
   test('multiline sed - nested alt', () => {
-    expect(commentDirective(NESTED_SED_IN_ALT, { debug: 0 }))
+    expect(commentDirective(NESTED_SED_INPUT_ALT, { debug: 0 }))
       .toEqual(NESTED_SED_EXPECT_ELSE);
-    expect(commentDirective(NESTED_SED_IN_ALT, { debug: 1 }))
+
+    expect(commentDirective(NESTED_SED_INPUT_ALT, { debug: 1 }))
       .toEqual(NESTED_SED_EXPECT_IF_OTHER);
-    expect(commentDirective(NESTED_SED_IN_ALT, { other: 1 }))
+
+    expect(commentDirective(NESTED_SED_INPUT_ALT, { other: 1 }))
       .toEqual(NESTED_SED_EXPECT_IF_DEBUG);
-    expect(commentDirective(NESTED_SED_IN_ALT, { debug: 1, other: 1 }))
+
+    expect(commentDirective(NESTED_SED_INPUT_ALT, { debug: 1, other: 1 }))
       .toEqual(NESTED_SED_EXPECT_IF_DEBUG_OTHER);
-    expect(commentDirective(NESTED_SED_IN_ALT, {
+
+    expect(commentDirective(NESTED_SED_INPUT_ALT, {
       debug: 1, other: 1, un: 1,
     })).toEqual(NESTED_SED_EXPECT_IF_DEBUG_OTHER_UN);
   });
 
   // Sed with regex flags
-  const SED_FLAGS_IN = `
+  const SED_FLAGS_INPUT = `
     // ###[IF]case=1;sed=/Hello/hi/i;
     Hello World`;
 
-  const SED_FLAGS_IF = `
+  const SED_FLAGS_EXPECTED = `
     hi World`;
 
   test('sed with regex flags', () => {
-    expect(commentDirective(SED_FLAGS_IN, { case: 1 })).toEqual(SED_FLAGS_IF);
+    expect(commentDirective(SED_FLAGS_INPUT, { case: 1 }))
+      .toEqual(SED_FLAGS_EXPECTED);
   });
 
   // Sed with regex flags
-  const SED_DELIMITER_IN_A = `
+  const SED_DELIMITER_INPUT_A = `
     // ###[IF]case=1;sed=$localhost:3000/api$api.example.com/other$;
     const apiUrl = 'http://localhost:3000/api';
     const apiUrl2 = 'http://localhost:3000/api';`;
-  const SED_DELIMITER_IN_B = `
+  const SED_DELIMITER_INPUT_B = `
     // ###[IF]case=1;sed=%%%localhost:3000/api%%%api.example.com/other%%%;
     const apiUrl = 'http://localhost:3000/api';
     const apiUrl2 = 'http://localhost:3000/api';`;
-  const SED_DELIMITER_IN_C = `
+  const SED_DELIMITER_INPUT_C = `
     // ###[IF]case=1;sed=%%%localhost:3000/api%%%api.example.com/other%%%2L;
     const apiUrl = 'http://localhost:3000/api';
     const apiUrl2 = 'http://localhost:3000/api';`;
-  const SED_DELIMITER_IN_D = `
+  const SED_DELIMITER_INPUT_D = `
     // ###[IF]case=1;sed=%%%localhost:3000/api%%%api.example.com/other%%%i2L;
     const apiUrl = 'http://localHost:3000/api';
     const apiUrl2 = 'http://locaLhost:3000/api';`;
 
-  const SED_DELIMITER_IF = `
+  const SED_DELIMITER_EXPECTED = `
     const apiUrl = 'http://api.example.com/other';
     const apiUrl2 = 'http://localhost:3000/api';`;
-  const SED_DELIMITER_IF_C = `
+  const SED_DELIMITER_EXPECTED_C = `
     const apiUrl = 'http://api.example.com/other';
     const apiUrl2 = 'http://api.example.com/other';`;
 
   test('sed with diffrent delimiter', () => {
-    expect(commentDirective(SED_DELIMITER_IN_A, { case: 1 }, {delimiter: '$'}))
-      .toEqual(SED_DELIMITER_IF);
-    expect(commentDirective(SED_DELIMITER_IN_B, { case: 1 }, {delimiter: '%%%'}))
-      .toEqual(SED_DELIMITER_IF);
-    expect(commentDirective(SED_DELIMITER_IN_C, { case: 1 }, {delimiter: '%%%'}))
-      .toEqual(SED_DELIMITER_IF_C);
-    expect(commentDirective(SED_DELIMITER_IN_D, { case: 1 }, {delimiter: '%%%'}))
-      .toEqual(SED_DELIMITER_IF_C);
+    expect(commentDirective(SED_DELIMITER_INPUT_A, { case: 1 }, { delimiter: '$' }))
+      .toEqual(SED_DELIMITER_EXPECTED);
+
+    expect(commentDirective(SED_DELIMITER_INPUT_B, { case: 1 }, { delimiter: '%%%' }))
+      .toEqual(SED_DELIMITER_EXPECTED);
+
+    expect(commentDirective(SED_DELIMITER_INPUT_C, { case: 1 }, { delimiter: '%%%' }))
+      .toEqual(SED_DELIMITER_EXPECTED_C);
+
+    expect(commentDirective(SED_DELIMITER_INPUT_D, { case: 1 }, { delimiter: '%%%' }))
+      .toEqual(SED_DELIMITER_EXPECTED_C);
   });
 });
 
@@ -584,35 +607,35 @@ const aContrivedExample = (aval = true) => {###
 
   test('empty seq option should work with default delimiter', () => {
     // the last '/' it removed here since it's the default 'delimiter'
-    const SEQ_EMPTY_OPT_EQ = `
+    const SEQ_EMPTY_OPT_EQ_INPUT = `
 // ###[IF]seq=1;append= /* cool *//;pop= /* cool *//;
 console.log('test');
 `;
-    const SEQ_EMPTY_OPT_EQ_OUT = `
+    const SEQ_EMPTY_OPT_EQ_EXPECTED = `
 console.log('test'); /* cool */
 `;
 
     expect(commentDirective(
-      SEQ_EMPTY_OPT_EQ,
+      SEQ_EMPTY_OPT_EQ_INPUT,
       { seq: 1 },
-    )).toEqual(SEQ_EMPTY_OPT_EQ_OUT);
+    )).toEqual(SEQ_EMPTY_OPT_EQ_EXPECTED);
   });
 
   test('empty seq option should work with non-default delimiter', () => {
     // the last '/' it removed here since it's the default 'delimiter'
-    const SEQ_EMPTY_OPT_EQ = `
+    const SEQ_EMPTY_OPT_EQ_INPUT = `
 // ###[IF]seq=1;append= /* cool */#;pop= /* cool */#;
 console.log('test');
 `;
-    const SEQ_EMPTY_OPT_EQ_OUT = `
+    const SEQ_EMPTY_OPT_EQ_EXPECTED = `
 console.log('test'); /* cool */
 `;
 
     expect(commentDirective(
-      SEQ_EMPTY_OPT_EQ,
+      SEQ_EMPTY_OPT_EQ_INPUT,
       { seq: 1 },
       { delimiter: '#' },
-    )).toEqual(SEQ_EMPTY_OPT_EQ_OUT);
+    )).toEqual(SEQ_EMPTY_OPT_EQ_EXPECTED);
   });
 });
 
@@ -623,7 +646,7 @@ console.log('test'); /* cool */
 describe('remove lines', () => {
 
   test('dont rm unless next line', () => {
-    const input = `
+    const RM_DONT_UNLESS_NEXT_INPUT = `
 --------
 // ###[IF]env=1;un=comment;rm=comment;
 let nested = "comments";
@@ -635,7 +658,7 @@ let nested = "comments";
 */
 --------
     `;
-    const output = `
+    const RM_DONT_UNLESS_NEXT_EXPECTED_1 = `
 --------
 let nested = "comments";
 // let dont = "work";
@@ -645,7 +668,7 @@ let nested = "comments";
 */
 --------
     `;
-    const output_100 = `
+    const RM_DONT_UNLESS_NEXT_EXPECTED_100 = `
 --------
 let nested = "comments";
 let dont = "work";
@@ -655,37 +678,42 @@ let dont = "work";
 */
 --------
     `;
-    expect(commentDirective(input, { env: 1 })).toEqual(output);
-    expect(commentDirective(input, { env: 0 })).toEqual(output);
-    expect(commentDirective(input, { env: 100 })).toEqual(output_100);
+    expect(commentDirective(RM_DONT_UNLESS_NEXT_INPUT, { env: 1 }))
+      .toEqual(RM_DONT_UNLESS_NEXT_EXPECTED_1);
+    expect(commentDirective(RM_DONT_UNLESS_NEXT_INPUT, { env: 0 }))
+      .toEqual(RM_DONT_UNLESS_NEXT_EXPECTED_1);
+    expect(commentDirective(RM_DONT_UNLESS_NEXT_INPUT, { env: 100 }))
+      .toEqual(RM_DONT_UNLESS_NEXT_EXPECTED_100);
   });
 
   test('dont rm commented out directives', () => {
-    const input = `
+    const RM_DONT_COMMENTED_OUT_DIRECTIVES_INPUT = `
 // // ###[IF]test=0;rm=comment;
 // let maths = 1 / 2 / 5;
 //     // ###[IF]test=0;rm=comment;
 //     let maths = 1 / 2 / 5;
     `;
-    expect(commentDirective(input, { test: 0 })).toEqual(input);
+    expect(commentDirective(RM_DONT_COMMENTED_OUT_DIRECTIVES_INPUT, { test: 0 }))
+      .toEqual(RM_DONT_COMMENTED_OUT_DIRECTIVES_INPUT);
   });
 
   test('rm single comments at end of line - loose', () => {
-    const input = `
+    const RM_SINGLE_END_OF_LINE_INPUT = `
 console.log('willy'); // ###[IF]test=0;rm=comment;
 console.log('nilly'); // remove me!
 console.log('i stay'); // ###[IF]test=0;rm=line;
 console.log('i dont'); // remove me!
 `;
-    expect(commentDirective(input, { test: 0 }, {loose: true}).trim())
+    expect(commentDirective(RM_SINGLE_END_OF_LINE_INPUT, { test: 0 }, { loose: true }).trim())
       .toEqual(`console.log('willy');\nconsole.log('nilly');\nconsole.log('i stay');`);
-    expect(commentDirective(input,
+    expect(commentDirective(
+      RM_SINGLE_END_OF_LINE_INPUT,
       { test: 0 },
-      {loose: false}).trim())
-      .toEqual(input.trim());
+      { loose: false },
+    )).toEqual(RM_SINGLE_END_OF_LINE_INPUT);
   });
 
-  const RL_IN = `
+  const RL_INPUT = `
     line1
     // ###[IF]debug=0;rm=2L;
     line2
@@ -702,11 +730,13 @@ console.log('i dont'); // remove me!
     line3
     line4`;
   test('remove specific number of lines', () => {
-    expect(commentDirective(RL_IN, { debug: 0 })).toEqual(RL_EXPECT_IF_FALSE);
+    expect(commentDirective(RL_INPUT, { debug: 0 }))
+      .toEqual(RL_EXPECT_IF_FALSE);
   });
 
   test('remove lines - no match', () => {
-    expect(commentDirective(RL_IN, { debug: 1 })).toEqual(RL_EXPECT_IF_TRUE);
+    expect(commentDirective(RL_INPUT, { debug: 1 }))
+      .toEqual(RL_EXPECT_IF_TRUE);
   });
 });
 
@@ -715,29 +745,33 @@ console.log('i dont'); // remove me!
 // -----------------------------------------------------------------------------
 describe('remove comments', () => {
   // No-op remove-comment directives
-  const RC_NOPE_IN = `
+  const RC_NOPE_INPUT = `
     // ###[IF]other=1;rm=comment;
     console.log("pretty please");`;
 
-  const RC_NOPE_IF = `
+  const RC_NOPE_EXPECTED = `
     console.log("pretty please");`;
 
-  const RC_NOPE_COND_IN = `
+  const RC_NOPE_COND_INPUT = `
     // ###[IF]other=1;rm=comment;rm=comment;
     console.log("pretty please");`;
 
   test('should not remove if no comment', () => {
-    expect(commentDirective(RC_NOPE_IN, { other: 1 })).toEqual(RC_NOPE_IF);
-    expect(commentDirective(RC_NOPE_IN, { other: 0 })).toEqual(RC_NOPE_IF);
+    expect(commentDirective(RC_NOPE_INPUT, { other: 1 }))
+      .toEqual(RC_NOPE_EXPECTED);
+    expect(commentDirective(RC_NOPE_INPUT, { other: 0 }))
+      .toEqual(RC_NOPE_EXPECTED);
   });
 
   test('should not remove if no comment cond', () => {
-    expect(commentDirective(RC_NOPE_COND_IN, { other: 1 })).toEqual(RC_NOPE_IF);
-    expect(commentDirective(RC_NOPE_COND_IN, { other: 0 })).toEqual(RC_NOPE_IF);
+    expect(commentDirective(RC_NOPE_COND_INPUT, { other: 1 }))
+      .toEqual(RC_NOPE_EXPECTED);
+    expect(commentDirective(RC_NOPE_COND_INPUT, { other: 0 }))
+      .toEqual(RC_NOPE_EXPECTED);
   });
 
   // Remove single-line comment
-  const RC_LINE_IN = `
+  const RC_LINE_INPUT = `
     // ###[IF]debug=1;un=comment;
     // console.log("THIS SHOULD WORK");
     console.log("pretty please");`;
@@ -751,37 +785,41 @@ describe('remove comments', () => {
     console.log("pretty please");`;
 
   test('remove single-line comment', () => {
-    expect(commentDirective(RC_LINE_IN, { debug: 1 })).toEqual(RC_LINE_EXPECT_IF_TRUE);
-    expect(commentDirective(RC_LINE_IN, { debug: 0 })).toEqual(RC_LINE_EXPECT_IF_FALSE);
+    expect(commentDirective(RC_LINE_INPUT, { debug: 1 }))
+      .toEqual(RC_LINE_EXPECT_IF_TRUE);
+    expect(commentDirective(RC_LINE_INPUT, { debug: 0 }))
+      .toEqual(RC_LINE_EXPECT_IF_FALSE);
   });
 
   // Remove single-line comment with conditional sed
-  const RC_LINE_COND_IN = `
+  const RC_LINE_COND_INPUT = `
     // ###[IF]debug=1;un=comment;sed=/WORK/WORK PLEASE/;
     // console.log("THIS SHOULD WORK");
     console.log("pretty please");`;
 
-  const RC_LINE_COND_IF_TRUE = `
+  const RC_LINE_COND_EXPECT_IF_TRUE = `
     console.log("THIS SHOULD WORK");
     console.log("pretty please");`;
 
-  const RC_LINE_COND_ELSE = `
+  const RC_LINE_COND_EXPECT_ELSE = `
     // console.log("THIS SHOULD WORK PLEASE");
     console.log("pretty please");`;
 
   test('remove single-line comment cond', () => {
-    expect(commentDirective(RC_LINE_COND_IN, { debug: 1 })).toEqual(RC_LINE_COND_IF_TRUE);
-    expect(commentDirective(RC_LINE_COND_IN, { debug: 0 })).toEqual(RC_LINE_COND_ELSE);
+    expect(commentDirective(RC_LINE_COND_INPUT, { debug: 1 }))
+      .toEqual(RC_LINE_COND_EXPECT_IF_TRUE);
+    expect(commentDirective(RC_LINE_COND_INPUT, { debug: 0 }))
+      .toEqual(RC_LINE_COND_EXPECT_ELSE);
   });
 
   // Remove/mod single-line comment cond nested
-  const RC_LINE_NEST_IN = `
+  const RC_LINE_NEST_INPUT = `
     // ###[IF]other=1;rm=comment;
     // ###[IF]debug=1;un=comment;sed=/WORK/WORK PLEASE/;
     // console.log("THIS SHOULD WORK");
     console.log("pretty please");`;
 
-  const RC_LINE_NEST_IN_ALT = `
+  const RC_LINE_NEST_INPUT_ALT = `
     // ###[IF]debug=1;un=comment;sed=/WORK/WORK PLEASE/;
     // ###[IF]other=1;rm=comment;
     // console.log("THIS SHOULD WORK");
@@ -799,16 +837,18 @@ describe('remove comments', () => {
     console.log("pretty please");`;
 
   test('remove/mod single-line comment cond nested', () => {
-    expect(commentDirective(RC_LINE_NEST_IN, { debug: 1 })).toEqual(RC_LINE_NEST_EXPECT_IF_TRUE);
-    expect(commentDirective(RC_LINE_NEST_IN, { debug: 0 })).toEqual(RC_LINE_NEST_EXPECT_ELSE);
-    expect(commentDirective(RC_LINE_NEST_IN_ALT, { debug: 1 }))
+    expect(commentDirective(RC_LINE_NEST_INPUT, { debug: 1 }))
       .toEqual(RC_LINE_NEST_EXPECT_IF_TRUE);
-    expect(commentDirective(RC_LINE_NEST_IN_ALT, { debug: 0 }))
+    expect(commentDirective(RC_LINE_NEST_INPUT, { debug: 0 }))
+      .toEqual(RC_LINE_NEST_EXPECT_ELSE);
+    expect(commentDirective(RC_LINE_NEST_INPUT_ALT, { debug: 1 }))
+      .toEqual(RC_LINE_NEST_EXPECT_IF_TRUE);
+    expect(commentDirective(RC_LINE_NEST_INPUT_ALT, { debug: 0 }))
       .toEqual(RC_LINE_NEST_EXPECT_ELSE);
 
-    expect(commentDirective(RC_LINE_NEST_IN, { debug: 0, other: 0 }))
+    expect(commentDirective(RC_LINE_NEST_INPUT, { debug: 0, other: 0 }))
       .toEqual(RC_LINE_NEST_EXPECT_ELSE);
-    expect(commentDirective(RC_LINE_NEST_IN, { debug: 1, other: 1 }))
+    expect(commentDirective(RC_LINE_NEST_INPUT, { debug: 1, other: 1 }))
       .toEqual(RC_LINE_NEST_EXPECT_ELSE_OTHER);
   });
 
@@ -831,7 +871,7 @@ describe('remove comments', () => {
       } else {
         const lines = template.split('\n');
         const replacedLine = lines[i];
-        if (!replacedLine) {continue;}
+        if (!replacedLine) { continue; }
         variations.push(template
           .replace(replacedLine, '&&&')
           .replace(moveDirective, replacedLine)
@@ -840,12 +880,13 @@ describe('remove comments', () => {
     }
 
     for (const variant of variations) {
-      expect(commentDirective(variant, { debug: 1, other: 5 })).toEqual(RC_LINE_EXPECT_IF_TRUE);
+      expect(commentDirective(variant, { debug: 1, other: 5 }))
+        .toEqual(RC_LINE_EXPECT_IF_TRUE);
     }
   });
 
   // Remove/uncomment single-line inline comments
-  const RC_INLINE_MULTI_IN = `
+  const RC_INLINE_MULTI_INPUT = `
     // ###[IF]debug=1;un=comment;
     // ###[IF]debug=2;rm=comment;
     const arr = [1, 2, /* 3, 4,*/ 5, 6];
@@ -864,28 +905,32 @@ describe('remove comments', () => {
     console.log("pretty please");`;
 
   test('remove/uncomment single-line inline', () => {
-    expect(commentDirective(RC_INLINE_MULTI_IN, { debug: 0 })).toEqual(RC_INLINE_EXPECT_IF_0);
-    expect(commentDirective(RC_INLINE_MULTI_IN, { debug: 1 })).toEqual(RC_INLINE_EXPECT_IF_1);
-    expect(commentDirective(RC_INLINE_MULTI_IN, { debug: 2 })).toEqual(RC_INLINE_EXPECT_IF_2);
+    expect(commentDirective(RC_INLINE_MULTI_INPUT, { debug: 0 }))
+      .toEqual(RC_INLINE_EXPECT_IF_0);
+    expect(commentDirective(RC_INLINE_MULTI_INPUT, { debug: 1 }))
+      .toEqual(RC_INLINE_EXPECT_IF_1);
+    expect(commentDirective(RC_INLINE_MULTI_INPUT, { debug: 2 }))
+      .toEqual(RC_INLINE_EXPECT_IF_2);
   });
 
   // Remove single-line multi comment
-  const RC_SINGLE_IN = `
+  const RC_SINGLE_INPUT = `
     line1
     // ###[IF]clean=1;rm=comment;
     /* this is a comment */
     line2`;
 
-  const RC_SINGLE_IF = `
+  const RC_SINGLE_EXPECTED = `
     line1
     line2`;
 
   test('remove single-line multi comment', () => {
-    expect(commentDirective(RC_SINGLE_IN, { clean: 1 })).toEqual(RC_SINGLE_IF);
+    expect(commentDirective(RC_SINGLE_INPUT, { clean: 1 }))
+      .toEqual(RC_SINGLE_EXPECTED);
   });
 
   // Remove multiline comment
-  const RC_MULTI_IN = `
+  const RC_MULTI_INPUT = `
     line1
     // ###[IF]clean=1;rm=comment;
     /* this is a
@@ -893,41 +938,44 @@ describe('remove comments', () => {
        with multiple lines */
     line2`;
 
-  const RC_MULTI_IF = `
+  const RC_MULTI_EXPECTED = `
     line1
     line2`;
 
   test('remove multiline comment', () => {
-    expect(commentDirective(RC_MULTI_IN, { clean: 1 })).toEqual(RC_MULTI_IF);
+    expect(commentDirective(RC_MULTI_INPUT, { clean: 1 }))
+      .toEqual(RC_MULTI_EXPECTED);
   });
 
   // Remove inline comment
-  const RC_INLINE_IN = `
+  const RC_INLINE_INPUT = `
     line1
     // ###[IF]clean=1;rm=comment;
     const x = 5; /* inline comment */ const y = 10;
     line2`;
 
-  const RC_INLINE_IF = `
+  const RC_INLINE_EXPECTED = `
     line1
     const x = 5; const y = 10;
     line2`;
 
   test('remove inline comment', () => {
-    expect(commentDirective(RC_INLINE_IN, { clean: 1 })).toEqual(RC_INLINE_IF);
+    expect(commentDirective(RC_INLINE_INPUT, { clean: 1 }))
+      .toEqual(RC_INLINE_EXPECTED);
   });
 
   test('remove comment - no match', () => {
-    const NO_MATCH_IF = `
+    const NO_MATCH_EXPECTED = `
     line1
     /* this is a comment */
     line2`;
-    expect(commentDirective(RC_SINGLE_IN, { clean: 0 })).toEqual(NO_MATCH_IF);
+    expect(commentDirective(RC_SINGLE_INPUT, { clean: 0 }))
+      .toEqual(NO_MATCH_EXPECTED);
   });
 
 
   test('remove comment - no match', () => {
-    const KEEP_EMPTY_IN = `
+    const RM_COMMENT_KEEP_EMPTY_INPUT = `
     // ###[IF]deli=1;un=comment;
     /*
     let maths = 1 / 2 / 5;
@@ -945,7 +993,7 @@ describe('remove comments', () => {
     */
     let maths = 1 / 2 / 9;
     `;
-    const KEEP_EMPTY_OUT = `
+    const RM_COMMENT_KEEP_EMPTY_EXPECTED = `
 
     let maths = 1 / 2 / 5;
     let maths = 1 / 2 / 6;
@@ -962,7 +1010,8 @@ describe('remove comments', () => {
 
     let maths = 1 / 2 / 9;
     `;
-    expect(commentDirective(KEEP_EMPTY_IN, { deli: 1 })).toEqual(KEEP_EMPTY_OUT);
+    expect(commentDirective(RM_COMMENT_KEEP_EMPTY_INPUT, { deli: 1 }))
+      .toEqual(RM_COMMENT_KEEP_EMPTY_EXPECTED);
   });
 });
 
@@ -970,7 +1019,7 @@ describe('remove comments', () => {
 // @id::uncomment
 // -----------------------------------------------------------------------------
 describe('uncomment', () => {
-  const UNCOMMENT_SINGLE_IN = `
+  const UNCOMMENT_SINGLE_INPUT = `
     line1
     // ###[IF]debug=1;un=comment;
     /*console.log('debug'); */
@@ -987,16 +1036,16 @@ describe('uncomment', () => {
     line2`;
 
   test('uncomment single-line comment', () => {
-    expect(commentDirective(UNCOMMENT_SINGLE_IN, { debug: 1 }))
+    expect(commentDirective(UNCOMMENT_SINGLE_INPUT, { debug: 1 }))
       .toEqual(UNCOMMENT_SINGLE_EXPECT_IF_TRUE);
   });
 
   test('uncomment - no match', () => {
-    expect(commentDirective(UNCOMMENT_SINGLE_IN, { debug: 0 }))
+    expect(commentDirective(UNCOMMENT_SINGLE_INPUT, { debug: 0 }))
       .toEqual(UNCOMMENT_SINGLE_EXPECT_IF_FALSE);
   });
 
-  const UNCOMMENT_MULTI_IN = `
+  const UNCOMMENT_MULTI_INPUT = `
     line1
     // ###[IF]debug=1;un=comment;
     /*
@@ -1014,7 +1063,7 @@ describe('uncomment', () => {
     line2`;
 
   test('uncomment multiline comment', () => {
-    expect(commentDirective(UNCOMMENT_MULTI_IN, { debug: 1 }))
+    expect(commentDirective(UNCOMMENT_MULTI_INPUT, { debug: 1 }))
       .toEqual(UNCOMMENT_MULTI_EXPECT_IF_TRUE);
   });
 });
@@ -1023,7 +1072,7 @@ describe('uncomment', () => {
 // @id::conditional
 // -----------------------------------------------------------------------------
 describe('conditional with else', () => {
-  const COND_ELSE_IN = `
+  const COND_ELSE_INPUT = `
     // ###[IF]mode=prod;sed=/dev/production/;sed=/test/live/;
     const env = 'dev-test';`;
 
@@ -1034,11 +1083,13 @@ describe('conditional with else', () => {
     const env = 'dev-live';`;
 
   test('if-true condition with else clause', () => {
-    expect(commentDirective(COND_ELSE_IN, { mode: 'prod' })).toEqual(COND_ELSE_EXPECT_IF_TRUE);
+    expect(commentDirective(COND_ELSE_INPUT, { mode: 'prod' }))
+      .toEqual(COND_ELSE_EXPECT_IF_TRUE);
   });
 
   test('if-false condition with else clause', () => {
-    expect(commentDirective(COND_ELSE_IN, { mode: 'dev' })).toEqual(COND_ELSE_EXPECT_IF_FALSE);
+    expect(commentDirective(COND_ELSE_INPUT, { mode: 'dev' }))
+      .toEqual(COND_ELSE_EXPECT_IF_FALSE);
   });
 });
 
@@ -1052,35 +1103,35 @@ fn main() {
     // ###[IF]feature_x=1;sed=/println!/log::info!/;
     println!("Hello, Rust!");
 }`;
-  const RUSTY_JS_SED_IF = `
+  const RUSTY_JS_SED_IF_EXPECTED = `
 fn main() {
     log::info!("Hello, Rust!");
 }`;
-  const RUSTY_JS_SED_ELSE = `
+  const RUSTY_JS_SED_ELSE_EXPECTED = `
 fn main() {
     println!("Hello, Rust!");
 }`;
 
   test('sed replacement with Rust comments - IF', () => {
     expect(commentDirective(RUSTY_JS_SED_INPUT, { feature_x: 1 }, cLike))
-      .toEqual(RUSTY_JS_SED_IF);
+      .toEqual(RUSTY_JS_SED_IF_EXPECTED);
   });
 
   test('sed replacement with Rust comments - ELSE', () => {
     expect(commentDirective(RUSTY_JS_SED_INPUT, { feature_x: 0 }, cLike))
-      .toEqual(RUSTY_JS_SED_ELSE);
+      .toEqual(RUSTY_JS_SED_ELSE_EXPECTED);
   });
 
   const RUSTY_JS_RM_COMMENT_SINGLE_INPUT = `
 // ###[IF]release=1;rm=comment;
 // This is a single line comment
 let x = 5;`;
-  const RUSTY_JS_RM_COMMENT_SINGLE_IF = `
+  const RUSTY_JS_RM_COMMENT_SINGLE_IF_EXPECTED = `
 let x = 5;`;
 
   test('remove Rust single-line comment - IF', () => {
     expect(commentDirective(RUSTY_JS_RM_COMMENT_SINGLE_INPUT, { release: 1 }, cLike))
-      .toEqual(RUSTY_JS_RM_COMMENT_SINGLE_IF);
+      .toEqual(RUSTY_JS_RM_COMMENT_SINGLE_IF_EXPECTED);
   });
 
   const RUSTY_JS_RM_COMMENT_MULTI_INPUT = `
@@ -1090,12 +1141,12 @@ let x = 5;`;
   multi-line comment
 */
 let y = 10;`;
-  const RUSTY_JS_RM_COMMENT_MULTI_IF = `
+  const RUSTY_JS_RM_COMMENT_MULTI_IF_EXPECTED = `
 let y = 10;`;
 
   test('remove Rust multi-line comment - IF', () => {
     expect(commentDirective(RUSTY_JS_RM_COMMENT_MULTI_INPUT, { release: 1 }, cLike))
-      .toEqual(RUSTY_JS_RM_COMMENT_MULTI_IF);
+      .toEqual(RUSTY_JS_RM_COMMENT_MULTI_IF_EXPECTED);
   });
 });
 
@@ -1106,19 +1157,19 @@ describe('python', () => {
   const PY_SED_INPUT = `
 # ###[IF]debug=1;sed=/print/logger.info/;
 print('hello world')`;
-  const PY_SED_IF = `
+  const PY_SED_IF_EXPECTED = `
 logger.info('hello world')`;
-  const PY_SED_ELSE = `
+  const PY_SED_ELSE_EXPECTED = `
 print('hello world')`;
 
   test('sed replacement with Python comments - IF', () => {
     expect(commentDirective(PY_SED_INPUT, { debug: 1 }, python))
-      .toEqual(PY_SED_IF);
+      .toEqual(PY_SED_IF_EXPECTED);
   });
 
   test('sed replacement with Python comments - ELSE', () => {
     expect(commentDirective(PY_SED_INPUT, { debug: 0 }, python))
-      .toEqual(PY_SED_ELSE);
+      .toEqual(PY_SED_ELSE_EXPECTED);
   });
 
   const PY_RM_COMMENT_MULTI_INPUT = `
@@ -1129,13 +1180,13 @@ This is a multiline
 Python docstring
 """
 line2`;
-  const PY_RM_COMMENT_MULTI_IF = `
+  const PY_RM_COMMENT_MULTI_IF_EXPECTED = `
 line1
 line2`;
 
   test('remove Python docstring comments - IF', () => {
     expect(commentDirective(PY_RM_COMMENT_MULTI_INPUT, { clean: 1 }, python))
-      .toEqual(PY_RM_COMMENT_MULTI_IF);
+      .toEqual(PY_RM_COMMENT_MULTI_IF_EXPECTED);
   });
 });
 
@@ -1146,19 +1197,19 @@ describe('html', () => {
   const HTML_SED_INPUT = `
 <!-- ###[IF]prod=1;sed=/dev-server/prod-server/; -->
 <script src="dev-server.js"></script>`;
-  const HTML_SED_IF = `
+  const HTML_SED_IF_EXPECTED = `
 <script src="prod-server.js"></script>`;
-  const HTML_SED_ELSE = `
+  const HTML_SED_ELSE_EXPECTED = `
 <script src="dev-server.js"></script>`;
 
   test('sed replacement with HTML comments - IF', () => {
     expect(commentDirective(HTML_SED_INPUT, { prod: 1 }, html))
-      .toEqual(HTML_SED_IF);
+      .toEqual(HTML_SED_IF_EXPECTED);
   });
 
   test('sed replacement with HTML comments - ELSE', () => {
     expect(commentDirective(HTML_SED_INPUT, { prod: 0 }, html))
-      .toEqual(HTML_SED_ELSE);
+      .toEqual(HTML_SED_ELSE_EXPECTED);
   });
 
   const HTML_RM_COMMENT_INPUT = `
@@ -1166,17 +1217,17 @@ describe('html', () => {
 <!-- ###[IF]clean=1;rm=comment; -->
 <!-- This is an HTML comment -->
 </div>`;
-  const HTML_RM_COMMENT_IF = `
+  const HTML_RM_COMMENT_IF_EXPECTED = `
 <div>
 </div>`;
 
   test('remove HTML comments - IF', () => {
     expect(commentDirective(HTML_RM_COMMENT_INPUT, { clean: 1 }, html))
-      .toEqual(HTML_RM_COMMENT_IF);
+      .toEqual(HTML_RM_COMMENT_IF_EXPECTED);
   });
 
 
-  const HTML_COMMENT_MULTI = `
+  const HTML_COMMENT_MULTI_INPUT = `
 <!-- start -->
 <!-- ###[IF]prod=1;un=comment;rm=comment; -->
 <!--
@@ -1186,7 +1237,7 @@ describe('html', () => {
 -->
 <!-- end -->
 `;
-  const HTML_COMMENT_MULTI_UN = `
+  const HTML_COMMENT_MULTI_UN_EXPECTED = `
 <!-- start -->
 
 
@@ -1195,18 +1246,18 @@ describe('html', () => {
 
 <!-- end -->
 `;
-  const HTML_COMMENT_MULTI_RM = `
+  const HTML_COMMENT_MULTI_RM_EXPECTED = `
 <!-- start -->
 <!-- end -->
 `;
 
   test('multi remove HTML comments', () => {
-    expect(commentDirective(HTML_COMMENT_MULTI, { prod: 0 }, html))
-      .toEqual(HTML_COMMENT_MULTI_RM);
+    expect(commentDirective(HTML_COMMENT_MULTI_INPUT, { prod: 0 }, html))
+      .toEqual(HTML_COMMENT_MULTI_RM_EXPECTED);
   });
   test('multi un-comment HTML comments', () => {
-    expect(commentDirective(HTML_COMMENT_MULTI, { prod: 1 }, html))
-      .toEqual(HTML_COMMENT_MULTI_UN);
+    expect(commentDirective(HTML_COMMENT_MULTI_INPUT, { prod: 1 }, html))
+      .toEqual(HTML_COMMENT_MULTI_UN_EXPECTED);
   });
 
 });
@@ -1220,19 +1271,19 @@ describe('html - nulled', () => {
   const HTML_SED_INPUT = `
 <!-- ###[IF]prod=1;sed=/dev-server/prod-server/; -->
 <script src="dev-server.js"></script>`;
-  const HTML_SED_IF = `
+  const HTML_SED_IF_EXPECTED = `
 <script src="prod-server.js"></script>`;
-  const HTML_SED_ELSE = `
+  const HTML_SED_ELSE_EXPECTED = `
 <script src="dev-server.js"></script>`;
 
   test('sed replacement with HTML comments - IF', () => {
     expect(commentDirective(HTML_SED_INPUT, { prod: 1 }, htmlNulled))
-      .toEqual(HTML_SED_IF);
+      .toEqual(HTML_SED_IF_EXPECTED);
   });
 
   test('sed replacement with HTML comments - ELSE', () => {
     expect(commentDirective(HTML_SED_INPUT, { prod: 0 }, htmlNulled))
-      .toEqual(HTML_SED_ELSE);
+      .toEqual(HTML_SED_ELSE_EXPECTED);
   });
 
   const HTML_RM_COMMENT_INPUT = `
@@ -1240,18 +1291,18 @@ describe('html - nulled', () => {
 <!-- ###[IF]clean=1;rm=comment; -->
 <!-- This is an HTML comment -->
 </div>`;
-  const HTML_RM_COMMENT_IF = `
+  const HTML_RM_COMMENT_IF_EXPECTED = `
 <div>
 </div>`;
 
   test('remove HTML comments - IF', () => {
     expect(commentDirective(HTML_RM_COMMENT_INPUT, { clean: 1 }, htmlNulled))
-      .toEqual(HTML_RM_COMMENT_IF);
+      .toEqual(HTML_RM_COMMENT_IF_EXPECTED);
 
   });
 
   // should not work - as there no multi
-  const HTML_COMMENT_MULTI = `
+  const HTML_COMMENT_MULTI_INPUT = `
 <!-- start -->
 <!-- ###[IF]prod=1;un=comment;rm=comment; -->
 <!--
@@ -1261,7 +1312,7 @@ describe('html - nulled', () => {
 -->
 <!-- end -->
 `;
-  const HTML_COMMENT_MULTI_UN = `
+  const HTML_COMMENT_MULTI_UN_EXPECTED = `
 <!-- start -->
 <!--
 
@@ -1270,7 +1321,7 @@ describe('html - nulled', () => {
 -->
 <!-- end -->
 `;
-  const HTML_COMMENT_MULTI_RM = `
+  const HTML_COMMENT_MULTI_RM_EXPECTED = `
 <!-- start -->
 <!--
 
@@ -1280,12 +1331,12 @@ describe('html - nulled', () => {
 <!-- end -->
 `;
   test('multi remove HTML comments', () => {
-    expect(commentDirective(HTML_COMMENT_MULTI, { prod: 0 }, htmlNulled))
-      .toEqual(HTML_COMMENT_MULTI_RM);
+    expect(commentDirective(HTML_COMMENT_MULTI_INPUT, { prod: 0 }, htmlNulled))
+      .toEqual(HTML_COMMENT_MULTI_RM_EXPECTED);
   });
   test('multi un-comment HTML comments', () => {
-    expect(commentDirective(HTML_COMMENT_MULTI, { prod: 1 }, htmlNulled))
-      .toEqual(HTML_COMMENT_MULTI_UN);
+    expect(commentDirective(HTML_COMMENT_MULTI_INPUT, { prod: 1 }, htmlNulled))
+      .toEqual(HTML_COMMENT_MULTI_UN_EXPECTED);
   });
 
 });
@@ -1299,23 +1350,23 @@ body {
   /* ###[IF]theme=light;sed=/color: black/color: white/; */
   color: black;
 }`;
-  const CSS_SED_IF = `
+  const CSS_SED_IF_EXPECTED = `
 body {
   color: white;
 }`;
-  const CSS_SED_ELSE = `
+  const CSS_SED_ELSE_EXPECTED = `
 body {
   color: black;
 }`;
 
   test('sed replacement with CSS comments - IF', () => {
     expect(commentDirective(CSS_SED_INPUT, { theme: 'light' }, css))
-      .toEqual(CSS_SED_IF);
+      .toEqual(CSS_SED_IF_EXPECTED);
   });
 
   test('sed replacement with CSS comments - ELSE', () => {
     expect(commentDirective(CSS_SED_INPUT, { theme: 'other' }, css))
-      .toEqual(CSS_SED_ELSE);
+      .toEqual(CSS_SED_ELSE_EXPECTED);
   });
 
   const CSS_RM_COMMENT_INPUT = `
@@ -1324,14 +1375,14 @@ body {
 .selector {
   property: value;
 }`;
-  const CSS_RM_COMMENT_IF = `
+  const CSS_RM_COMMENT_IF_EXPECTED = `
 .selector {
   property: value;
 }`;
 
   test('remove CSS comment - IF', () => {
     expect(commentDirective(CSS_RM_COMMENT_INPUT, { minify: 1 }, css))
-      .toEqual(CSS_RM_COMMENT_IF);
+      .toEqual(CSS_RM_COMMENT_IF_EXPECTED);
   });
 });
 
@@ -1342,31 +1393,31 @@ describe('bash/shell', () => {
   const BASH_SED_INPUT = `
 # ###[IF]env=prod;sed=/echo "dev/echo "production/;
 echo "dev server started"`;
-  const BASH_SED_IF = `
+  const BASH_SED_IF_EXPECTED = `
 echo "production server started"`;
-  const BASH_SED_ELSE = `
+  const BASH_SED_ELSE_EXPECTED = `
 echo "dev server started"`;
 
   test('sed replacement with Bash comments - IF', () => {
     expect(commentDirective(BASH_SED_INPUT, { env: 'prod' }, bash))
-      .toEqual(BASH_SED_IF);
+      .toEqual(BASH_SED_IF_EXPECTED);
   });
 
   test('sed replacement with Bash comments - ELSE', () => {
     expect(commentDirective(BASH_SED_INPUT, { env: 'dev' }, bash))
-      .toEqual(BASH_SED_ELSE);
+      .toEqual(BASH_SED_ELSE_EXPECTED);
   });
 
   const BASH_RM_COMMENT_SINGLE_INPUT = `
 # ###[IF]strip_comments=1;rm=comment;
 # This is a bash comment
 export VAR="value"`;
-  const BASH_RM_COMMENT_SINGLE_IF = `
+  const BASH_RM_COMMENT_SINGLE_IF_EXPECTED = `
 export VAR="value"`;
 
   test('remove Bash single-line comment - IF', () => {
     expect(commentDirective(BASH_RM_COMMENT_SINGLE_INPUT, { strip_comments: 1 }, bash))
-      .toEqual(BASH_RM_COMMENT_SINGLE_IF);
+      .toEqual(BASH_RM_COMMENT_SINGLE_IF_EXPECTED);
   });
 
   const BASH_RM_COMMENT_MULTI_INPUT = `
@@ -1377,12 +1428,12 @@ multi-line here-document
 treated as a comment.
 EOF
 ls -l`;
-  const BASH_RM_COMMENT_MULTI_IF = `
+  const BASH_RM_COMMENT_MULTI_IF_EXPECTED = `
 ls -l`;
 
   test('remove Bash multi-line here-document comment - IF', () => {
     expect(commentDirective(BASH_RM_COMMENT_MULTI_INPUT, { strip_comments: 1 }, bash))
-      .toEqual(BASH_RM_COMMENT_MULTI_IF);
+      .toEqual(BASH_RM_COMMENT_MULTI_IF_EXPECTED);
   });
 });
 
@@ -1392,38 +1443,42 @@ ls -l`;
 // -----------------------------------------------------------------------------
 describe('edge cases', () => {
   test('no matching conditions', () => {
-    const JS_NO_MATCH_IN = `
+    const EDGE_NO_MATCH_INPUT = `
 // ###[IF]nonexistent=1;sed=/old/new/;
 some content`;
-    const JS_NO_MATCH_ELSE = `
+    const EDGE_NO_MATCH_EXPECTED = `
 some content`;
-    expect(commentDirective(JS_NO_MATCH_IN, { other: 1 })).toEqual(JS_NO_MATCH_ELSE);
+    expect(commentDirective(EDGE_NO_MATCH_INPUT, { other: 1 }))
+      .toEqual(EDGE_NO_MATCH_EXPECTED);
   });
 
   test('white space adjust', () => {
-    const WHITE_SPACE_IN = `
+    const WHITESPACE_ADJUST_INPUT = `
 // ###[IF]case=1;un=comment;
   /* some content */`;
-    const WHITE_SPACE_IN_B = `
+    const WHITESPACE_ADJUST_INPUT_B = `
 // ###[IF]case=1;un=comment;
    /*some content*/`;
-    const WHITE_SPACE_IN_C = `
+    const WHITESPACE_ADJUST_INPUT_C = `
 // ###[IF]case=1;un=comment;
    /*some content
    */c`;
-    const JS_NO_MATCH_ELSE = `
+    const WHITESPACE_ADJUST_EXPECTED = `
    some content`;
-    const JS_NO_MATCH_ELSE_C = `
+    const WHITESPACE_ADJUST_C_EXPECTED = `
    some content
    c`;
 
-    expect(commentDirective(WHITE_SPACE_IN, { case: 1 })).toEqual(JS_NO_MATCH_ELSE);
-    expect(commentDirective(WHITE_SPACE_IN_B, { case: 1 })).toEqual(JS_NO_MATCH_ELSE);
-    expect(commentDirective(WHITE_SPACE_IN_C, { case: 1 })).toEqual(JS_NO_MATCH_ELSE_C);
+    expect(commentDirective(WHITESPACE_ADJUST_INPUT, { case: 1 }))
+      .toEqual(WHITESPACE_ADJUST_EXPECTED);
+    expect(commentDirective(WHITESPACE_ADJUST_INPUT_B, { case: 1 }))
+      .toEqual(WHITESPACE_ADJUST_EXPECTED);
+    expect(commentDirective(WHITESPACE_ADJUST_INPUT_C, { case: 1 }))
+      .toEqual(WHITESPACE_ADJUST_C_EXPECTED);
   });
 
   test('complex nested scenarios', () => {
-    const JS_COMPLEX_IN = `
+    const COMPLEX_NESTED_SCENARIOS_INPUT = `
 // ###[IF]feature=enabled;rm=comment;
 // ###[IF]debug=1;un=comment;
 /*
@@ -1432,73 +1487,82 @@ const old = 'value';
 // ###[IF]debug=1;rm=2L;
 */
 const result = 'final';`;
-    const JS_COMPLEX_ELSE = `
+    const COMPLEX_NESTED_SCENARIOS_EXPECTED_NOOP = `
 /*
 const old = 'value';
 */
 const result = 'final';`;
-    const JS_COMPLEX_IF_FEATURE = `
+    const COMPLEX_NESTED_SCENARIOS_EXPECTED_FEATURE_ENABLED = `
 const result = 'final';`;
-    const JS_COMPLEX_IF_DEBUG = `
+    const COMPLEX_NESTED_SCENARIOS_EXPECTED_DEBUG_ENABLED = `
 
 const new = 'value';`;
-    expect(commentDirective(JS_COMPLEX_IN, { noop: 1 })).toEqual(JS_COMPLEX_ELSE);
-    expect(commentDirective(JS_COMPLEX_IN, { feature: 'enabled' })).toEqual(JS_COMPLEX_IF_FEATURE);
-    expect(commentDirective(JS_COMPLEX_IN, { debug: 1 })).toEqual(JS_COMPLEX_IF_DEBUG);
+    expect(commentDirective(COMPLEX_NESTED_SCENARIOS_INPUT, { noop: 1 }))
+      .toEqual(COMPLEX_NESTED_SCENARIOS_EXPECTED_NOOP);
+    expect(commentDirective(COMPLEX_NESTED_SCENARIOS_INPUT, { feature: 'enabled' }))
+      .toEqual(COMPLEX_NESTED_SCENARIOS_EXPECTED_FEATURE_ENABLED);
+    expect(commentDirective(COMPLEX_NESTED_SCENARIOS_INPUT, { debug: 1 }))
+      .toEqual(COMPLEX_NESTED_SCENARIOS_EXPECTED_DEBUG_ENABLED);
   });
 
   test('empty lines preserved', () => {
-    const JS_EMPTY_LINES_IN = `
+    const EMPTY_LINES_PRESERVED_INPUT = `
 
 // ###[IF]test=1;sed=/old/new/;
 old value
 
 `;
-    const JS_EMPTY_LINES_IF = `
+    const EMPTY_LINES_PRESERVED_EXPECTED = `
 
 new value
 
 `;
-    expect(commentDirective(JS_EMPTY_LINES_IN, { test: 1 })).toEqual(JS_EMPTY_LINES_IF);
+    expect(commentDirective(EMPTY_LINES_PRESERVED_INPUT, { test: 1 }))
+      .toEqual(EMPTY_LINES_PRESERVED_EXPECTED);
   });
 
   test('numeric vs string values', () => {
-    const JS_NUMERIC_IF_IN = `
+    const NUMERIC_STRING_VALUES_INPUT = `
 // ###[IF]count=5;sed=/old/new/;
 old value`;
-    const JS_NUMERIC_IF = `
+    const NUMERIC_STRING_VALUES_EXPECTED = `
 new value`;
-    expect(commentDirective(JS_NUMERIC_IF_IN, { count: 5 })).toEqual(JS_NUMERIC_IF);
-    expect(commentDirective(JS_NUMERIC_IF_IN, { count: '5' })).toEqual(JS_NUMERIC_IF);
+    expect(commentDirective(NUMERIC_STRING_VALUES_INPUT, { count: 5 }))
+      .toEqual(NUMERIC_STRING_VALUES_EXPECTED);
+    expect(commentDirective(NUMERIC_STRING_VALUES_INPUT, { count: '5' }))
+      .toEqual(NUMERIC_STRING_VALUES_EXPECTED);
   });
 
   test('boolean values', () => {
-    const JS_BOOLEAN_IF_IN = `
+    const BOOLEAN_VALUES_INPUT = `
 // ###[IF]enabled=true;sed=/off/on/;
 status: off`;
-    const JS_BOOLEAN_IF = `
+    const BOOLEAN_VALUES_EXPECTED = `
 status: on`;
-    expect(commentDirective(JS_BOOLEAN_IF_IN, { enabled: true })).toEqual(JS_BOOLEAN_IF);
+    expect(commentDirective(BOOLEAN_VALUES_INPUT, { enabled: true }))
+      .toEqual(BOOLEAN_VALUES_EXPECTED);
   });
 
   test('undefined flags default to no match', () => {
-    const JS_UNDEFINED_ELSE_IN = `
+    const UNDEFINED_FLAGS_INPUT = `
 // ###[IF]undefined_flag=1;sed=/old/new/;
 old value`;
-    const JS_UNDEFINED_ELSE = `
+    const UNDEFINED_FLAGS_EXPECTED = `
 old value`;
-    expect(commentDirective(JS_UNDEFINED_ELSE_IN, {})).toEqual(JS_UNDEFINED_ELSE);
+    expect(commentDirective(UNDEFINED_FLAGS_INPUT, {}))
+      .toEqual(UNDEFINED_FLAGS_EXPECTED);
   });
 
 
   test('multiple directives on same content', () => {
-    const JS_MULTIPLE_IF_IN = `
+    const MULTIPLE_DIRECTIVES_INPUT = `
 // ###[IF]first=1;sed=/a/b/;
 // ###[IF]second=1;sed=/b/c/;
 a value`;
-    const JS_MULTIPLE_IF = `
+    const MULTIPLE_DIRECTIVES_EXPECTED = `
 c value`;
-    expect(commentDirective(JS_MULTIPLE_IF_IN, { first: 1, second: 1 })).toEqual(JS_MULTIPLE_IF);
+    expect(commentDirective(MULTIPLE_DIRECTIVES_INPUT, { first: 1, second: 1 }))
+      .toEqual(MULTIPLE_DIRECTIVES_EXPECTED);
   });
 });
 
@@ -1509,32 +1573,35 @@ c value`;
 describe('error handling', () => {
 
   test('invalid directive syntax is ignored', () => {
-    const input = `
+    const ERROR_INVALID_DIRECTIVE_SYNTAX_INPUT = `
   // ###[IF]invalid syntax here
   content`;
-    expect(commentDirective(input, {})).toEqual(input);
+    expect(commentDirective(ERROR_INVALID_DIRECTIVE_SYNTAX_INPUT, {}))
+      .toEqual(ERROR_INVALID_DIRECTIVE_SYNTAX_INPUT);
   });
 
 
   test('invalid remove lines syntax is ignored', () => {
-    const input = `
+    const ERROR_INVALID_RM_LINES_INPUT = `
 // ###[IF]test=1;rm=invalid;
 line1
 line2`;
-    const expected = `
+    const ERROR_INVALID_RM_LINES_EXPECTED = `
 line1
 line2`;
-    expect(commentDirective(input, { test: 1 })).toEqual(expected);
+    expect(commentDirective(ERROR_INVALID_RM_LINES_INPUT, { test: 1 }))
+      .toEqual(ERROR_INVALID_RM_LINES_EXPECTED);
   });
 
   test('bad whitespace variations in directives', () => {
-    const JS_WHITESPACE_IF_IN = `
+    const ERROR_BAD_WHITESPACE_INPUT = `
   //   ###[IF]  test = 1 ; sed = /old/new/ ;
 old value`;
-    const JS_WHITESPACE_IF = `
+    const ERROR_BAD_WHITESPACE_EXPECTED = `
   //   ###[IF]  test = 1 ; sed = /old/new/ ;
 old value`;
-    expect(commentDirective(JS_WHITESPACE_IF_IN, { 'test ': 1 })).toEqual(JS_WHITESPACE_IF);
+    expect(commentDirective(ERROR_BAD_WHITESPACE_INPUT, { 'test ': 1 }))
+      .toEqual(ERROR_BAD_WHITESPACE_EXPECTED);
   });
 
 });
@@ -1545,7 +1612,7 @@ describe('error handling - throw option enable', () => {
     expect(() => {
       commentDirective(`
     // ###[IF]invalid syntax here
-    content`, {}, {throw: true});
+    content`, {}, { throw: true });
     }).toThrow();
   });
 
@@ -1553,7 +1620,7 @@ describe('error handling - throw option enable', () => {
     expect(() => {
       commentDirective(`// ###[IF]test=1;rm=invalid;
 line1
-line2`, { test: 1 }, {throw: true});
+line2`, { test: 1 }, { throw: true });
     }).toThrow();
   });
 
@@ -1561,7 +1628,7 @@ line2`, { test: 1 }, {throw: true});
     expect(() => {
       commentDirective(`
   //   ###[IF]  test = 1 ; sed = /old/new/ ;
-old value`, { test: 1 }, {throw: true});
+old value`, { test: 1 }, { throw: true });
     }).toThrow();
   });
 });
@@ -1572,7 +1639,7 @@ old value`, { test: 1 }, {throw: true});
 // -----------------------------------------------------------------------------
 describe('real-world scenarios', () => {
   test('build configuration switching', () => {
-    const input = `
+    const BUILD_CONFIG_SWITCHING_INPUT = `
 // ###[IF]env=production;sed=/development.api.com/production.api.com/g;
 
 const config = {
@@ -1583,13 +1650,13 @@ const config = {
   // ###[IF]env=production;rm=1L;
   /*verbose: true */
 };`;
-    const expectedProd = `
+    const BUILD_CONFIG_SWITCHING_EXPECTED_PROD = `
 
 const config = {
   apiUrl: 'https://production.api.com',
 };`;
 
-    const expectedDev = `
+    const BUILD_CONFIG_SWITCHING_EXPECTED_DEV = `
 
 const config = {
   apiUrl: 'https://development.api.com',
@@ -1597,12 +1664,14 @@ const config = {
   verbose: true
 };`;
 
-    expect(commentDirective(input, { env: 'production' })).toEqual(expectedProd);
-    expect(commentDirective(input, { env: 'development' })).toEqual(expectedDev);
+    expect(commentDirective(BUILD_CONFIG_SWITCHING_INPUT, { env: 'production' }))
+      .toEqual(BUILD_CONFIG_SWITCHING_EXPECTED_PROD);
+    expect(commentDirective(BUILD_CONFIG_SWITCHING_INPUT, { env: 'development' }))
+      .toEqual(BUILD_CONFIG_SWITCHING_EXPECTED_DEV);
   });
 
   test('complex-ish template', () => {
-    const input = `
+    const COMPLEX_TEMPLATE_INPUT = `
   // @internal default/lookup value assignment
   // ###[IF]is_fg=1;un=comment;rm=comment
   [ [idG, idF],/* [fgG, fgF],*/ [lvlG, lvlF], [pluginG, pluginF], [defsG, defsF] ] = ([
@@ -1625,7 +1694,7 @@ const config = {
     [PluginFn<M> | null | undefined, PluginFn<M> | undefined | null], // plugin
     [Partial<DefinitionsD>, Partial<DefinitionsD | null>], // styles
   ],`;
-    const expected = `
+    const COMPLEX_TEMPLATE_EXPECTED_1 = `
   // @internal default/lookup value assignment
   [ [idG, idF], [fgG, fgF], [lvlG, lvlF], [pluginG, pluginF], [defsG, defsF] ] = ([
     ['ID', id, '{}'], // PTAG_ID
@@ -1645,7 +1714,7 @@ const config = {
     [Partial<DefinitionsD>, Partial<DefinitionsD | null>], // styles
   ],`;
 
-    const expected_0 = `
+    const COMPLEX_TEMPLATE_EXPECTED_0 = `
   // @internal default/lookup value assignment
   [ [idG, idF], [lvlG, lvlF], [pluginG, pluginF], [defsG, defsF] ] = ([
     ['ID', id, '{}'], // PTAG_ID
@@ -1663,12 +1732,14 @@ const config = {
   ],`;
 
 
-    expect(commentDirective(input, { is_fg: 1})).toEqual(expected);
-    expect(commentDirective(input, { is_fg: 0})).toEqual(expected_0);
+    expect(commentDirective(COMPLEX_TEMPLATE_INPUT, { is_fg: 1 }))
+      .toEqual(COMPLEX_TEMPLATE_EXPECTED_1);
+    expect(commentDirective(COMPLEX_TEMPLATE_INPUT, { is_fg: 0 }))
+      .toEqual(COMPLEX_TEMPLATE_EXPECTED_0);
   });
 
   test('feature flag management', () => {
-    const input = `
+    const FEATURE_FLAG_INPUT = `
 class MyComponent {
   render() {
     return (
@@ -1684,7 +1755,7 @@ class MyComponent {
 }`;
 
     // with new UI enabled
-    const expectedNewUI = `
+    const FEATURE_FLAG_NEW_UI_EXPECTED = `
 class MyComponent {
   render() {
     return (
@@ -1696,7 +1767,7 @@ class MyComponent {
 }`;
 
     // with new UI disabled
-    const expectedOldUI = `
+    const FEATURE_FLAG_OLD_UI_EXPECTED = `
 class MyComponent {
   render() {
     return (
@@ -1709,16 +1780,17 @@ class MyComponent {
   }
 }`;
 
-    expect(commentDirective(input, { feature_new_ui: 1 }, {
+    expect(commentDirective(FEATURE_FLAG_INPUT, { feature_new_ui: 1 }, {
       single: [/\{\/\*s*/, /s*\*\/\}/],
       multi: [/\{\/\*/, /\*\/\}/],
       keepSpace: true,
-    })).toEqual(expectedNewUI);
-    expect(commentDirective(input, { feature_new_ui: 0 }, {
+    })).toEqual(FEATURE_FLAG_NEW_UI_EXPECTED);
+
+    expect(commentDirective(FEATURE_FLAG_INPUT, { feature_new_ui: 0 }, {
       single: [/\{\/\*s*/, /s*\*\/\}/],
       multi: [/\{\/\*/, /\*\/\}/],
       keepSpace: true,
-    })).toEqual(expectedOldUI);
+    })).toEqual(FEATURE_FLAG_OLD_UI_EXPECTED);
   });
 
 });
@@ -1729,76 +1801,81 @@ class MyComponent {
 // -----------------------------------------------------------------------------
 describe('Bot Examples', () => {
   test('Basic Usage', () => {
-    const template = `
+    const BOT_BASIC_USAGE_INPUT = `
     // ###[IF]env=production;sed=/localhost:3000/api.example.com/;
     const apiUrl = 'http://localhost:3000/api';`;
-    const output = `
+    const BOT_BASIC_USAGE_EXPECTED = `
     const apiUrl = 'http://api.example.com/api';`;
-    expect(commentDirective(template, { env: 'production' })).toEqual(output);
+    expect(commentDirective(BOT_BASIC_USAGE_INPUT, { env: 'production' }))
+      .toEqual(BOT_BASIC_USAGE_EXPECTED);
   });
 
   // Supported Actions: Text Replacement
 
   test('Text Replacement - Basic', () => {
-    const template = `
+    const BOT_TEXT_REPLACEMENT_BASIC_INPUT = `
     // ###[IF]debug=true;sed=/console.log/logger.debug/;
     console.log('Debug message');
     console.error('Error message');
     `;
-    const output = `
+    const BOT_TEXT_REPLACEMENT_BASIC_EXPECTED = `
     logger.debug('Debug message');
     console.error('Error message');
     `;
-    expect(commentDirective(template, { debug: true })).toEqual(output);
+    expect(commentDirective(BOT_TEXT_REPLACEMENT_BASIC_INPUT, { debug: true }))
+      .toEqual(BOT_TEXT_REPLACEMENT_BASIC_EXPECTED);
   });
 
   test('Text Replacement - Global replacement with flags', () => {
-    const template = `
+    const BOT_TEXT_REPLACEMENT_GLOBAL_FLAGS_INPUT = `
     // ###[IF]prod=1;sed=/dev-/prod-/g;
     const devServer = 'dev-api.com';
     const devDatabase = 'dev-db.com';
     const devCache = 'dev-redis.com';
     `;
-    const output = `
+    const BOT_TEXT_REPLACEMENT_GLOBAL_FLAGS_EXPECTED = `
     const devServer = 'prod-api.com';
     const devDatabase = 'prod-db.com';
     const devCache = 'prod-redis.com';
     `;
-    expect(commentDirective(template, { prod: 1 })).toEqual(output);
+    expect(commentDirective(BOT_TEXT_REPLACEMENT_GLOBAL_FLAGS_INPUT, { prod: 1 }))
+      .toEqual(BOT_TEXT_REPLACEMENT_GLOBAL_FLAGS_EXPECTED);
   });
 
   test('Text Replacement - Case-insensitive replacement', () => {
-    const template = `
+    const BOT_TEXT_REPLACEMENT_CASE_INSENSITIVE_INPUT = `
     // ###[IF]normalize=1;sed=/ERROR/error/i;
     System ERROR occurred
     Another Error detected
     `;
-    const output = `
+    const BOT_TEXT_REPLACEMENT_CASE_INSENSITIVE_EXPECTED = `
     System error occurred
     Another Error detected
     `;
-    expect(commentDirective(template, { normalize: 1 })).toEqual(output);
+    expect(commentDirective(BOT_TEXT_REPLACEMENT_CASE_INSENSITIVE_INPUT, { normalize: 1 }))
+      .toEqual(BOT_TEXT_REPLACEMENT_CASE_INSENSITIVE_EXPECTED);
   });
 
   test('Text Replacement - Multi-line replacement (2L)', () => {
-    const template = `
+    const BOT_TEXT_REPLACEMENT_MULTILINE_INPUT = `
     // ###[IF]refactor=1;sed=/oldFunction/newFunction/2L;
     const result1 = oldFunction(data);
     const result2 = oldFunction(moreData);
     const result3 = oldFunction(evenMore); // This won't be replaced
     `;
-    const output = `
+    const BOT_TEXT_REPLACEMENT_MULTILINE_EXPECTED = `
     const result1 = newFunction(data);
     const result2 = newFunction(moreData);
     const result3 = oldFunction(evenMore); // This won't be replaced
     `;
-    expect(commentDirective(template, { refactor: 1 })).toEqual(output);
+    expect(commentDirective(BOT_TEXT_REPLACEMENT_MULTILINE_INPUT, { refactor: 1 }))
+      .toEqual(BOT_TEXT_REPLACEMENT_MULTILINE_EXPECTED);
   });
 
   // Supported Actions: Remove Lines
 
   test('Remove Lines - rm=3L', () => {
-    const template = `
+    const BOT_REMOVE_LINES_INPUT = `
     console.log('Always runs');
     // ###[IF]removeLogs=1;rm=3L;
     console.log('Debug line 1');
@@ -1806,17 +1883,18 @@ describe('Bot Examples', () => {
     console.log('Debug line 3');
     console.log('This will remain');
     `;
-    const output = `
+    const BOT_REMOVE_LINES_EXPECTED = `
     console.log('Always runs');
     console.log('This will remain');
     `;
-    expect(commentDirective(template, { removeLogs: 1 })).toEqual(output);
+    expect(commentDirective(BOT_REMOVE_LINES_INPUT, { removeLogs: 1 }))
+      .toEqual(BOT_REMOVE_LINES_EXPECTED);
   });
 
   // Supported Actions: Remove Comments
 
   test('Remove Comments - rm=comment', () => {
-    const template = `
+    const BOT_REMOVE_COMMENTS_INPUT = `
     // ###[IF]minify=1;rm=comment;
     /* This is a detailed explanation
        of what this function does
@@ -1825,112 +1903,119 @@ describe('Bot Examples', () => {
       return 'result';
     }
     `;
-    const output = `
+    const BOT_REMOVE_COMMENTS_EXPECTED = `
     function importantFunction() {
       return 'result';
     }
     `;
-    expect(commentDirective(template, { minify: 1 })).toEqual(output);
+    expect(commentDirective(BOT_REMOVE_COMMENTS_INPUT, { minify: 1 }))
+      .toEqual(BOT_REMOVE_COMMENTS_EXPECTED);
   });
 
   // Supported Actions: Uncomment Code
 
   test('Uncomment Code - un=comment', () => {
-    const template = `
+    const BOT_UNCOMMENT_CODE_INPUT = `
     // ###[IF]enableFeature=1;un=comment;
     /*function newFeature() {
       console.log('New feature enabled!');
       return processData();
     }*/`;
-    const output = `
+    const BOT_UNCOMMENT_CODE_EXPECTED = `
     function newFeature() {
       console.log('New feature enabled!');
       return processData();
     }`;
-    expect(commentDirective(template, { enableFeature: 1 })).toEqual(output);
+    expect(commentDirective(BOT_UNCOMMENT_CODE_INPUT, { enableFeature: 1 }))
+      .toEqual(BOT_UNCOMMENT_CODE_EXPECTED);
   });
 
   // Language Support
 
   test('Language Support - C-like (Rust example)', () => {
-    const rustCode = `
+    const BOT_RUST_CODE_INPUT = `
     fn main() {
         // ###[IF]feature_x=1;sed=/println!(/log::info!(/;
         println!("Debug message");
     }
     `;
-    const expected = `
+    const BOT_RUST_CODE_EXPECTED = `
     fn main() {
         log::info!("Debug message");
     }
     `;
-    expect(commentDirective(rustCode, { feature_x: 1 }, cLike)).toEqual(expected);
+    expect(commentDirective(BOT_RUST_CODE_INPUT, { feature_x: 1 }, cLike))
+      .toEqual(BOT_RUST_CODE_EXPECTED);
   });
 
   test('Language Support - Python example', () => {
-    const pythonCode = `
+    const BOT_PYTHON_CODE_INPUT = `
     # ###[IF]debug=1;sed=/print(/logging.info(/g;
     print('Hello world')
     def calculate():
         print('Calculating...')
     `;
-    const expected = `
+    const BOT_PYTHON_CODE_EXPECTED = `
     logging.info('Hello world')
     def calculate():
         logging.info('Calculating...')
     `;
-    expect(commentDirective(pythonCode, { debug: 1 }, python)).toEqual(expected);
+    expect(commentDirective(BOT_PYTHON_CODE_INPUT, { debug: 1 }, python))
+      .toEqual(BOT_PYTHON_CODE_EXPECTED);
   });
 
   test('Language Support - HTML example', () => {
-    const htmlTemplate = `
+    const BOT_HTML_TEMPLATE_INPUT = `
     <!-- ###[IF]prod=1;sed=/localhost/example.com/g; -->
     <script src="http://localhost:3000/api.js"></script>
     <link href="http://localhost:3000/styles.css" rel="stylesheet">
     `;
-    const expected = `
+    const BOT_HTML_TEMPLATE_EXPECTED = `
     <script src="http://example.com:3000/api.js"></script>
     <link href="http://example.com:3000/styles.css" rel="stylesheet">
     `;
-    expect(commentDirective(htmlTemplate, { prod: 1 }, html)).toEqual(expected);
+    expect(commentDirective(BOT_HTML_TEMPLATE_INPUT, { prod: 1 }, html))
+      .toEqual(BOT_HTML_TEMPLATE_EXPECTED);
   });
 
   test('Language Support - CSS example', () => {
-    const cssCode = `
+    const BOT_CSS_CODE_INPUT = `
     body {
       /* ###[IF]theme=dark;sed=/white/black/; */
       background-color: white;
       color: black;
     }
     `;
-    const expected = `
+    const BOT_CSS_CODE_EXPECTED = `
     body {
       background-color: black;
       color: black;
     }
     `;
-    expect(commentDirective(cssCode, { theme: 'dark' }, css)).toEqual(expected);
+    expect(commentDirective(BOT_CSS_CODE_INPUT, { theme: 'dark' }, css))
+      .toEqual(BOT_CSS_CODE_EXPECTED);
   });
 
   test('Language Support - Bash/Shell example', () => {
-    const shellScript = `
+    const BOT_BASH_SCRIPT_INPUT = `
     #!/bin/bash
     # ###[IF]env=prod;sed=/localhost/production.server.com/;
     curl http://localhost:8080/health
     echo "Server status checked"
     `;
-    const expected = `
+    const BOT_BASH_SCRIPT_EXPECTED = `
     #!/bin/bash
     curl http://production.server.com:8080/health
     echo "Server status checked"
     `;
-    expect(commentDirective(shellScript, { env: 'prod' }, bash)).toEqual(expected);
+    expect(commentDirective(BOT_BASH_SCRIPT_INPUT, { env: 'prod' }, bash))
+      .toEqual(BOT_BASH_SCRIPT_EXPECTED);
   });
 
   // Advanced Examples
 
   test('Advanced - Build Configuration Management (development)', () => {
-    const buildConfig = `
+    const BOT_BUILD_CONFIG_DEV_INPUT = `
     // ###[IF]env=development;sed=/production.api.com/localhost:3000/g;
     const config = {
       apiUrl: 'https://production.api.com',
@@ -1943,7 +2028,7 @@ describe('Bot Examples', () => {
       /*hotReload: true, */
     };
     `;
-    const expected = `
+    const BOT_BUILD_CONFIG_DEV_EXPECTED = `
     const config = {
       apiUrl: 'https://localhost:3000',
       debug: true,
@@ -1951,11 +2036,12 @@ describe('Bot Examples', () => {
       hotReload: true,
     };
     `;
-    expect(commentDirective(buildConfig, { env: 'development' })).toEqual(expected);
+    expect(commentDirective(BOT_BUILD_CONFIG_DEV_INPUT, { env: 'development' }))
+      .toEqual(BOT_BUILD_CONFIG_DEV_EXPECTED);
   });
 
   test('Advanced - Build Configuration Management (production)', () => {
-    const buildConfig = `
+    const BOT_BUILD_CONFIG_PROD_INPUT = `
     // ###[IF]env=development;sed=/production.api.com/localhost:3000/g;
     const config = {
       apiUrl: 'https://production.api.com',
@@ -1968,17 +2054,18 @@ describe('Bot Examples', () => {
       /*hotReload: true, */
     };
     `;
-    const expected = `
+    const BOT_BUILD_CONFIG_PROD_EXPECTED = `
     const config = {
       apiUrl: 'https://production.api.com',
       compressionEnabled: true,
     };
     `;
-    expect(commentDirective(buildConfig, { env: 'production' })).toEqual(expected);
+    expect(commentDirective(BOT_BUILD_CONFIG_PROD_INPUT, { env: 'production' }))
+      .toEqual(BOT_BUILD_CONFIG_PROD_EXPECTED);
   });
 
   test('Advanced - Feature Flag Implementation', () => {
-    const featureCode = `
+    const BOT_FEATURE_FLAG_INPUT = `
     class UserService {
       async getUser(id: string) {
         // ###[IF]cache_enabled=1;un=comment;
@@ -1998,7 +2085,7 @@ describe('Bot Examples', () => {
       }
     }
     `;
-    const withCacheExpected = `
+    const BOT_FEATURE_FLAG_CACHE_EXPECTED = `
     class UserService {
       async getUser(id: string) {
 
@@ -2014,9 +2101,10 @@ describe('Bot Examples', () => {
       }
     }
     `;
-    expect(commentDirective(featureCode, { cache_enabled: 1 })).toEqual(withCacheExpected);
+    expect(commentDirective(BOT_FEATURE_FLAG_INPUT, { cache_enabled: 1 }))
+      .toEqual(BOT_FEATURE_FLAG_CACHE_EXPECTED);
 
-    const fullFeaturesExpected = `
+    const BOT_FEATURE_FLAG_FULL_EXPECTED = `
     class UserService {
       async getUser(id: string) {
 
@@ -2033,47 +2121,50 @@ describe('Bot Examples', () => {
       }
     }
     `;
-    expect(commentDirective(featureCode, { cache_enabled: 1, analytics: 1 }))
-      .toEqual(fullFeaturesExpected);
+    expect(commentDirective(BOT_FEATURE_FLAG_INPUT, { cache_enabled: 1, analytics: 1 }))
+      .toEqual(BOT_FEATURE_FLAG_FULL_EXPECTED);
   });
 
 
   // Custom Comment Formats
   test('Custom Comment Formats - SQL example', () => {
-    const sqlScript = `
+    const BOT_SQL_SCRIPT_INPUT = `
     -- ###[IF]env=prod;sed=/test_db/prod_db/;
     USE test_db;
     SELECT * FROM users;
     `;
-    const expected = `
+    const BOT_SQL_SCRIPT_EXPECTED = `
     USE prod_db;
     SELECT * FROM users;
     `;
-    expect(commentDirective(sqlScript, { env: 'prod' }, sql)).toEqual(expected);
+    expect(commentDirective(BOT_SQL_SCRIPT_INPUT, { env: 'prod' }, sql))
+      .toEqual(BOT_SQL_SCRIPT_EXPECTED);
   });
 
   // Error Handling
   test('Error Handling - Unknown actions are ignored', () => {
-    const unknownAction = `
+    const BOT_ERROR_UNKNOWN_ACTION_INPUT = `
     // ###[IF]test=1;unknown=action;
     console.log('This line remains unchanged');
     `;
-    const expected = `
+    const BOT_ERROR_UNKNOWN_ACTION_EXPECTED = `
     // ###[IF]test=1;unknown=action;
     console.log('This line remains unchanged');
     `;
-    expect(commentDirective(unknownAction, { test: 1 })).toEqual(expected);
+    expect(commentDirective(BOT_ERROR_UNKNOWN_ACTION_INPUT, { test: 1 }))
+      .toEqual(BOT_ERROR_UNKNOWN_ACTION_EXPECTED);
   });
 
   test('Error Handling - Invalid sed patterns are ignored', () => {
-    const invalidSed = `
+    const BOT_ERROR_INVALID_SED_INPUT = `
     // ###[IF]test=1;sed=invalid_pattern;
     console.log('This line remains unchanged');
     `;
-    const expected = `
+    const BOT_ERROR_INVALID_SED_EXPECTED = `
     console.log('This line remains unchanged');
     `;
-    expect(commentDirective(invalidSed, { test: 1 })).toEqual(expected);
+    expect(commentDirective(BOT_ERROR_INVALID_SED_INPUT, { test: 1 }))
+      .toEqual(BOT_ERROR_INVALID_SED_EXPECTED);
   });
 });
 
