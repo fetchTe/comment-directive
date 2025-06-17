@@ -628,6 +628,20 @@ console.log('i stay');
       expect(RESULT_LOOSE_FALSE).toBe(LOOSE_FALSE_EXPECTED);
       expect(RESULT_LOOSE_TRUE).toBe(LOOSE_TRUE_EXPECTED);
     });
+
+
+    test('example 2 from README', () => {
+      const RESULT_LOOSE = commentDirective(`
+      // ###[IF]loose=1;sed=/log/play/;
+      // ###[IF]loose=1;sed=/super/fast/;
+      loging('super'); // ###[IF]loose=1;sed=/loging/and/;
+      loging('loose');`, { loose: 1 }, { loose: true });
+      expect(RESULT_LOOSE).toBe(`
+      playing('fast');
+      and('loose');`);
+    });
+
+
   });
 
   describe('keepEmptyLines', () => {

@@ -700,18 +700,162 @@ let dont = "work";
   test('rm single comments at end of line - loose', () => {
     const RM_SINGLE_END_OF_LINE_INPUT = `
 console.log('willy'); // ###[IF]test=0;rm=comment;
-console.log('nilly'); // remove me!
+console.log('nilly'); // remove this comment
 console.log('i stay'); // ###[IF]test=0;rm=line;
-console.log('i dont'); // remove me!
+console.log('i dont'); // remove this line
+
+console.log('i stay'); // ###[IF]test=0;rm=line;
+console.log('i dont'); // remove this line
 `;
+    const RM_SINGLE_END_OF_LINE_OUT = `
+console.log('willy');
+console.log('nilly');
+console.log('i stay');
+
+console.log('i stay');`;
     expect(commentDirective(RM_SINGLE_END_OF_LINE_INPUT, { test: 0 }, { loose: true }).trim())
-      .toEqual(`console.log('willy');\nconsole.log('nilly');\nconsole.log('i stay');`);
+      .toEqual(RM_SINGLE_END_OF_LINE_OUT.trim());
+
     expect(commentDirective(
       RM_SINGLE_END_OF_LINE_INPUT,
       { test: 0 },
       { loose: false },
     )).toEqual(RM_SINGLE_END_OF_LINE_INPUT);
+
   });
+
+  test('rm stacked - loose', () => {
+    const RM_STACKED_INPUT = `
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('3333'); // remove this line or comment
+console.log('4444'); // keep this line`;
+    const RM_STACKED_OUT_0 = `
+console.log('1111');
+console.log('2222');
+console.log('3333');
+console.log('4444'); // keep this line`;
+    const RM_STACKED_OUT_1 = `
+console.log('1111');
+console.log('4444'); // keep this line`;
+
+
+    const RM_STACKCASE_INPUT = `
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+console.log('0000'); // ###[IF]test=0;sed=/1/0/;sed=/1/2/;
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=3;rm=line;
+console.log('3333'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('4444'); // remove this line
+console.log('5555'); // ###[IF]test=1;rm=comment;rm=comment;
+console.log('6666'); // remove this comment
+
+
+console.log('0000'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('3333'); // remove this line
+console.log('4444');`;
+
+    const RM_STACKCASE_OUT_0 = `
+console.log('1110');
+console.log('0111');
+console.log('2222');
+console.log('3333');
+console.log('4444');
+console.log('5555');
+console.log('6666');
+
+
+console.log('0000');
+console.log('1111');
+console.log('2222');
+console.log('3333');
+console.log('4444');`;
+
+    const RM_STACKCASE_OUT_1 = `
+console.log('2220');
+console.log('2111');
+console.log('3333');
+console.log('5555');
+console.log('6666');
+
+
+console.log('0000');
+console.log('4444');`;
+
+
+    const RM_STACKCASE_OUT_2 = `
+console.log('2220');
+console.log('2111');
+console.log('2222');
+console.log('3333');
+console.log('4444');
+console.log('5555');
+console.log('6666');
+
+
+console.log('0000');
+console.log('1111');
+console.log('2222');
+console.log('3333');
+console.log('4444');`;
+
+
+
+    const RM_STACKCASE_OUT_3 = `
+console.log('2220');
+console.log('2111');
+console.log('2222');
+console.log('4444');
+console.log('5555');
+console.log('6666');
+
+
+console.log('0000');
+console.log('1111');
+console.log('2222');
+console.log('3333');
+console.log('4444');`;
+
+
+    expect(commentDirective(
+      RM_STACKED_INPUT,
+      { test: 0 },
+      { keepDirective: false, loose: true },
+    ).trim()).toEqual(RM_STACKED_OUT_0.trim());
+
+    expect(commentDirective(
+      RM_STACKED_INPUT,
+      { test: 1 },
+      { keepDirective: false, loose: true },
+    ).trim()).toEqual(RM_STACKED_OUT_1.trim());
+
+
+    expect(commentDirective(
+      RM_STACKCASE_INPUT,
+      { test: 0 },
+      { keepDirective: false, loose: true },
+    ).trim()).toEqual(RM_STACKCASE_OUT_0.trim());
+    expect(commentDirective(
+      RM_STACKCASE_INPUT,
+      { test: 1 },
+      { keepDirective: false, loose: true },
+    ).trim()).toEqual(RM_STACKCASE_OUT_1.trim());
+    expect(commentDirective(
+      RM_STACKCASE_INPUT,
+      { test: 2 },
+      { keepDirective: false, loose: true },
+    ).trim()).toEqual(RM_STACKCASE_OUT_2.trim());
+    expect(commentDirective(
+      RM_STACKCASE_INPUT,
+      { test: 3 },
+      { keepDirective: false, loose: true },
+    ).trim()).toEqual(RM_STACKCASE_OUT_3.trim());
+  });
+
 
   const RL_INPUT = `
     line1
@@ -1564,6 +1708,24 @@ c value`;
     expect(commentDirective(MULTIPLE_DIRECTIVES_INPUT, { first: 1, second: 1 }))
       .toEqual(MULTIPLE_DIRECTIVES_EXPECTED);
   });
+
+
+  test('min length directive', () => {
+    const MIN_INPUT = `
+// ###[IF]a=1;rm=1L;
+some content
+
+// ###[IF]a=1;rm=1L;
+// ###[IF]a=1;rm=1L
+// ###[IF]a=1;rm=1L;
+some content
+some content
+some content
+
+`;
+    expect(commentDirective(MIN_INPUT, { a: 1 }).trim()).toEqual('');
+  });
+
 });
 
 

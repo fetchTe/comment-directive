@@ -927,6 +927,7 @@ export const commentDirective = (
   let iquitAt = 0; // loop breaker to prevent going to infinity and beyond
   // index-based comment directive stack used to re-insert directives
   const directiveStack: string[] = [];
+  const looseStack: [string, string][] = [];
 
   const options = (optionsP ?? DEFAULT_OPTIONS) as CommentOptionsR;
   // set props to better cache createDirectiveRegex rather than object.assign
@@ -940,6 +941,7 @@ export const commentDirective = (
 
   // keep directives - if loose forced to keep otherwise
   const loose = options?.loose;
+  const looseRm = loose ? `${LOOSE_PLACEHOLE}_RM` : null; // filter remove placeholder
   const dkeep = options?.keepDirective;
   const re = createDirectiveRegex(options);
   // min directive line length: <id> a=1;rm=1L
@@ -947,6 +949,7 @@ export const commentDirective = (
 
   // split into [cond, if-true, if-false?]
   const splitDirectiveLine = (line: string): string[] | null => {
+    if (looseRm) { line = line.replace(looseRm, ''); }
     // only cache lines with comment directive
     let match = re.dir.exec(line)?.[1];
     if (!match) { return null; }
@@ -964,10 +967,10 @@ export const commentDirective = (
       // action spec always start with 'prefix='
       if (ACT_PREFIXS.some(p => part?.startsWith(p))) {
         result.push(part);
-      } else {
-        // not a new action, so its a continuation of the prv one
-        result[result.length - 1] += ';' + part;
+        continue;
       }
+      // not a new action, so its a continuation of the prv one
+      result[result.length - 1] += ';' + part;
     }
     // must have a condition and one action - but we still rtn to report error
     return result;
@@ -984,6 +987,24 @@ export const commentDirective = (
     // keep loop'ing till stable -> no comment directives left that make changes
     if (!ibreak) { break; }
     lines = out.length ? out.slice(0) : tmpl.split(/\r?\n/);
+
+    // loose preprocessing involves replacing any content comment directive (let a = 1; // ###[IF])
+    // with a placeholder and moving the actual directive below; while far from
+    // elegant, it allows for the same pipeline without conditional logic everywhere
+    lines = !loose || out.length
+      ? lines
+      : (lines as string[]).reduce((lout, line) => {
+          // initial check(s) to bail out fast
+          if (minDirLen >= line.length || line.indexOf(identifier) === -1) {
+            return lout.concat(line);
+          }
+          const rdir = re.dir.exec(line)?.[0] ?? '';
+          // if comment directive but on it's own line
+          if (!line.replace(rdir, '').trim().length) { return lout.concat(line); }
+          const id = dkeep ? `${LOOSE_PLACEHOLE}${looseStack.length}` : '';
+          id.length && looseStack.push([id, rdir]);
+          return lout.concat([line.replace(rdir, id), rdir + (looseRm as string)]);
+        }, [] as string[]);
 
     // global sed loop(s)
     for (let i = iglobal; i < lines.length; i++) {
@@ -1016,7 +1037,6 @@ export const commentDirective = (
       tmpl = [pre, line, replaced].concat(post).join('\n');
       isGlobalSed = true;
     }
-
     // if global sed was applied, restart the main loop
     if (isGlobalSed) { continue; }
 
@@ -1047,11 +1067,6 @@ export const commentDirective = (
       if (dkeep) {
         out.push(directiveStack.length);
         directiveStack.push(line);
-      } else if (loose) {
-        // @ts-expect-error if loose we have to rm/hack the directive (should silce?)
-        lines[i] = lines[i].replace(re.dir.exec(line)?.[0] ?? '', '');
-        // if chars then we need to save content in: content // ###[IF]prod=1
-        (lines[i] as string)?.trim()?.length && out.push(lines[i] ?? '');
       }
       // this while loop handles 'stacked' comment directives by pushing them
       // back into 'out' evaluate next time around, again, and again
@@ -1080,12 +1095,18 @@ export const commentDirective = (
     }
   }
 
-  tmpl = out.join('\n');
-  // explicity dump/clear out for better garbage managment
+  // re-join output
+  tmpl = (looseRm
+    ? out.filter(v => !String(v).includes(looseRm))
+    : out).join('\n');
+
+  // replace loose directives
+  if (loose) { for (const [id, dir] of looseStack) { tmpl = tmpl.replace(id, dir); } }
+
+  // explicity dump/clear out for better potential garbage collection
   out.length = 0;
   lines.length = 0;
   return tmpl;
 };
 
 export default commentDirective;
-
