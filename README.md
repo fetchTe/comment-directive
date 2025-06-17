@@ -535,6 +535,19 @@ console.log('i stay');
 //
 ```
 
+If you like to play fast and `loose`, you can also stack directives:
+```ts
+/* @INPUT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+// ###[IF]loose=1;sed=/log/play/;
+// ###[IF]loose=1;sed=/super/fast/;
+loging('super'); // ###[IF]loose=1;sed=/loging/and/;
+loging('loose');
+
+/* @loose=true ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+playing('fast');
+and('loose');
+```
+
 
 #### ▎`keepDirective`
 Keep comment directives in the output, purged by default:

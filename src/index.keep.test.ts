@@ -850,11 +850,21 @@ describe('remove lines', () => {
 console.log('willy'); // ###[IF]test=0;rm=comment;
 console.log('nilly'); // remove me!
 `;
+    const output = `
+console.log('willy'); // ###[IF]test=0;rm=comment;
+console.log('nilly');
+`;
     expect(commentDirective(
       input,
       { test: 0 },
       { keepDirective: true, loose: true },
-    ).trim()).toEqual(`console.log('willy'); // ###[IF]test=0;rm=comment;\nconsole.log('nilly');`);
+    ).trim()).toEqual(output.trim());
+
+    expect(commentDirective(
+      input,
+      { test: 1 },
+      { keepDirective: true, loose: true },
+    ).trim()).toEqual(input.trim());
 
     expect(commentDirective(
       input,
@@ -862,6 +872,181 @@ console.log('nilly'); // remove me!
       { keepDirective: true, loose: false },
     ).trim()).toEqual(input.trim());
   });
+
+  test('rm single line at end of line - loose', () => {
+    const input = `
+console.log('willy'); // ###[IF]test=0;rm=line;
+console.log('nilly'); // remove me!
+`;
+    const output = `
+console.log('willy'); // ###[IF]test=0;rm=line;
+`;
+    expect(commentDirective(
+      input,
+      { test: 0 },
+      { keepDirective: true, loose: true },
+    ).trim()).toEqual(output.trim());
+
+    expect(commentDirective(
+      input,
+      { test: 1 },
+      { keepDirective: true, loose: true },
+    ).trim()).toEqual(input.trim());
+
+    expect(commentDirective(
+      input,
+      { test: 0 },
+      { keepDirective: true, loose: false },
+    ).trim()).toEqual(input.trim());
+  });
+
+
+  test('rm stacked - loose', () => {
+    const RM_STACKED_INPUT = `
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('3333'); // remove this line or comment
+console.log('4444'); // keep this line`;
+    const RM_STACKED_OUT_0 = `
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('3333');
+console.log('4444'); // keep this line`;
+    const RM_STACKED_OUT_1 = `
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('4444'); // keep this line`;
+
+
+    const RM_STACKCASE_INPUT = `
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+console.log('0000'); // ###[IF]test=0;sed=/1/0/;sed=/1/2/;
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=3;rm=line;
+console.log('3333'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('4444'); // remove this line
+console.log('5555'); // ###[IF]test=1;rm=comment;rm=comment;
+console.log('6666'); // remove this comment
+
+
+console.log('0000'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('3333'); // remove this line
+console.log('4444');`;
+
+    const RM_STACKCASE_OUT_0 = `
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+console.log('1110'); // ###[IF]test=0;sed=/1/0/;sed=/1/2/;
+console.log('0111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=3;rm=line;
+console.log('3333'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('4444');
+console.log('5555'); // ###[IF]test=1;rm=comment;rm=comment;
+console.log('6666');
+
+
+console.log('0000'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('3333');
+console.log('4444');`;
+
+    const RM_STACKCASE_OUT_1 = `
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+console.log('2220'); // ###[IF]test=0;sed=/1/0/;sed=/1/2/;
+console.log('2111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('3333'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('5555'); // ###[IF]test=1;rm=comment;rm=comment;
+console.log('6666');
+
+
+console.log('0000'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('4444');`;
+
+
+    const RM_STACKCASE_OUT_2 = `
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+console.log('2220'); // ###[IF]test=0;sed=/1/0/;sed=/1/2/;
+console.log('2111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=3;rm=line;
+console.log('3333'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('4444');
+console.log('5555'); // ###[IF]test=1;rm=comment;rm=comment;
+console.log('6666');
+
+
+console.log('0000'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('3333');
+console.log('4444');`;
+
+
+
+    const RM_STACKCASE_OUT_3 = `
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+// ###[IF]test=0;sed=/0/1/;sed=/0/2/;
+console.log('2220'); // ###[IF]test=0;sed=/1/0/;sed=/1/2/;
+console.log('2111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=3;rm=line;
+console.log('4444');
+console.log('5555'); // ###[IF]test=1;rm=comment;rm=comment;
+console.log('6666');
+
+
+console.log('0000'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('1111'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('2222'); // ###[IF]test=1;rm=line;rm=comment;
+console.log('3333');
+console.log('4444');`;
+
+
+    expect(commentDirective(
+      RM_STACKED_INPUT,
+      { test: 0 },
+      { keepDirective: true, loose: true },
+    ).trim()).toEqual(RM_STACKED_OUT_0.trim());
+
+    expect(commentDirective(
+      RM_STACKED_INPUT,
+      { test: 1 },
+      { keepDirective: true, loose: true },
+    ).trim()).toEqual(RM_STACKED_OUT_1.trim());
+
+
+    expect(commentDirective(
+      RM_STACKCASE_INPUT,
+      { test: 0 },
+      { keepDirective: true, loose: true },
+    ).trim()).toEqual(RM_STACKCASE_OUT_0.trim());
+    expect(commentDirective(
+      RM_STACKCASE_INPUT,
+      { test: 1 },
+      { keepDirective: true, loose: true },
+    ).trim()).toEqual(RM_STACKCASE_OUT_1.trim());
+    expect(commentDirective(
+      RM_STACKCASE_INPUT,
+      { test: 2 },
+      { keepDirective: true, loose: true },
+    ).trim()).toEqual(RM_STACKCASE_OUT_2.trim());
+    expect(commentDirective(
+      RM_STACKCASE_INPUT,
+      { test: 3 },
+      { keepDirective: true, loose: true },
+    ).trim()).toEqual(RM_STACKCASE_OUT_3.trim());
+
+
+  });
+
 
 
   const RM_LINES_INPUT = `
