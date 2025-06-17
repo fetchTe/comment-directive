@@ -919,8 +919,13 @@ export const commentDirective = (
 ): string => {
   const out: (string | number)[] = [];
   let lines: (string | number)[] = [];
-  let iquitAt = 0;
-  // let doffset = 0; // directive offset
+  // 'i' while loop variable
+  let iglobal = 0; // global sed i start - prevents re-run of global loop
+  let hglobal = 0; // if it has global sed - for perf gains in main loop
+  let ibreak = -1; // if ibreak is zero - struc is stable, break and return
+  let istack =  0; // 'stacked' comment directive count
+  let iquitAt = 0; // loop breaker to prevent going to infinity and beyond
+  // index-based comment directive stack used to re-insert directives
   const directiveStack: string[] = [];
 
   const options = (optionsP ?? DEFAULT_OPTIONS) as CommentOptionsR;
@@ -937,11 +942,11 @@ export const commentDirective = (
   const loose = options?.loose;
   const dkeep = options?.keepDirective;
   const re = createDirectiveRegex(options);
+  // min directive line length: <id> a=1;rm=1L
+  const minDirLen = options.identifier.length + 9;
 
   // split into [cond, if-true, if-false?]
   const splitDirectiveLine = (line: string): string[] | null => {
-    // much faster to do a indexOf check initially (caching this fn isn't really worth it)
-    if (line.indexOf(identifier) === -1) { return null; }
     // only cache lines with comment directive
     let match = re.dir.exec(line)?.[1];
     if (!match) { return null; }
@@ -969,32 +974,29 @@ export const commentDirective = (
   };
 
 
-  let iglobal = 0;
-  let ibreak = -1;
-  let istack =  0;
-  // let istack = 0;
   // while & break iterative loop
   while (true) {
+    let isGlobalSed = false;
     // 10000 loop limit - could happen with a bad user sed directive
     // eslint-disable-next-line @stylistic/max-len
     if (iquitAt > 1e4) { throw new Error(`[commentDirective] 10,000-loop limit was hit, either a recursive loop or an absurd use-case; instead of going to infinity and beyond, bailing...`); }
     iquitAt++;
-
     // keep loop'ing till stable -> no comment directives left that make changes
     if (!ibreak) { break; }
     lines = out.length ? out.slice(0) : tmpl.split(/\r?\n/);
-    // const lines: string[] = out.length ? out : tmpl.split(/\r?\n/);
-    let passChanged = false;
 
     // global sed loop(s)
     for (let i = iglobal; i < lines.length; i++) {
       const line = lines[i] as string;
+      // initial check(s) to bail out fast
+      if (minDirLen >= line.length || line.indexOf(identifier) === -1) { continue; }
       const parts = splitDirectiveLine(line);
       if (!parts) { continue; }
       const dir = parseDirective(parts, line, options);
       if (!isSedDirectiveG(dir)) { continue; }
       const action = getAction(dir, flags);
       if (!action) { continue; }
+      hglobal = 1;
       const pre = lines.slice(0, i).join('\n');
       let target = lines.slice(i + 1);
       // if limit to N lines
@@ -1012,11 +1014,12 @@ export const commentDirective = (
       if (prv === replaced) { continue; }
       // if diff exit for-loop & restart the main while loop
       tmpl = [pre, line, replaced].concat(post).join('\n');
-      passChanged = true;
+      isGlobalSed = true;
     }
 
     // if global sed was applied, restart the main loop
-    if (passChanged) { continue; }
+    if (isGlobalSed) { continue; }
+
     // prevent re-run of global loop
     iglobal = lines.length + 1;
     // reset as new loop
@@ -1027,15 +1030,19 @@ export const commentDirective = (
     // non-global sed main/loop
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? '';
-      // // this is a bit of a head
-      if (istack) { out.push(line); continue; }
-      if (isNumber(line)) { out.push(line); continue; }
+      // initial check(s) to bail out fast
+      if (istack // if 'stacked' comment directive, push to out, and re-evaluate
+          || typeof line === 'number'
+          || minDirLen >= line.length
+          || line.indexOf(identifier) === -1) { out.push(line); continue; }
       const parts = splitDirectiveLine(line);
+      if (!parts) { out.push(line); continue; }
       const dir = parseDirective(parts, line, options);
       if (!dir) { out.push(line); continue; }
 
-      // skip sed global; only happen if keeping directive
-      if (isSedDirectiveG(dir)) { dkeep && out.push(line); continue; }
+      // skip sed global - already processed
+      if (hglobal && isSedDirectiveG(dir)) { dkeep && out.push(line); continue; }
+      const action = getAction(dir, flags);
 
       if (dkeep) {
         out.push(directiveStack.length);
@@ -1049,7 +1056,7 @@ export const commentDirective = (
       // this while loop handles 'stacked' comment directives by pushing them
       // back into 'out' evaluate next time around, again, and again
       let nxtLine = lines[i + 1] ?? '';
-      while (isString(nxtLine) && nxtLine?.length && re.dir.test(nxtLine)) {
+      while (typeof nxtLine === 'string' && nxtLine.length > minDirLen && re.dir.test(nxtLine)) {
         out.push(nxtLine);
         ++i;
         ++ibreak;
@@ -1058,24 +1065,18 @@ export const commentDirective = (
       }
 
       const iprv = i;
-      // const iout = out.length;
-      const action = getAction(dir, flags);
-      // @todo: remove this mutation/pass-around-logic
       i = applyDirective(i, action, out, lines, options, re);
-
       if (iprv !== i) { ++ibreak; }
     }
 
     if (!ibreak || !out.length) { break; }
-
   }
 
-  // re-add comment directives
-  if (dkeep) {
+  // re-add comment directive
+  if (directiveStack.length) {
     for (let i = 0; i < out.length; i++) {
-      if (isNumber(out[i])) {
-        out[i] = directiveStack[out[i] as number] ?? '';
-      }
+      if (typeof out[i] !== 'number') { continue; }
+      out[i] = directiveStack[out[i] as number] ?? '';
     }
   }
 
