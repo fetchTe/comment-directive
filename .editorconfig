@@ -38,7 +38,7 @@ indent_size = 2
 # spaces for indentation as per web standards and general best practices
 indent_style = space
 # remove trailing whitespace to avoid unnecessary diffs with a bunch of EOL changes
-trim_trailing_whitespace = true
+trim_trailing_whitespace = false
 
 
 #------------------------------------------------------------------------------#
@@ -81,7 +81,7 @@ max_line_length = 80
 # TypeScript - github.com/Microsoft/TypeScript/wiki/Coding-guidelines#style
 [*.{cts,mts,ts}]
 max_line_length = 80
-
+trim_trailing_whitespace = false
 
 #------------------------------------------------------------------------------#
 # 3:code/srv
