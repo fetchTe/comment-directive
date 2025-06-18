@@ -3,7 +3,7 @@ name: on-release
 env:
   # release artifacts (adjust to fit your use; an empty string will disable)
   #  > tars filename: bun-make.v1.0.2.tar.xz
-  ARTIFACTS   : '/tmp/tars/*.tar*,./dist/index.mjs,./dist/index.min.mjs,./dist/lang.mjs'
+  ARTIFACTS   : '/tmp/tars/*.tar*,./dist/index.js,./dist/index.min.js,./dist/lang.js'
   # set to '0' to disable commit links
   LINK_COMMITS: 1
   # set to '0' to consider all tags (otherwise tags must start with 'v')
@@ -14,8 +14,6 @@ env:
   FALLBACK_TAG: 'v0.0.0'
   # set to '1' to enable action cache (perf/saving is negligible, if at all)
   USE_CACHE   : 0
-  # release tmp file location
-  RELEASE_FILE: '/tmp/release.md'
 
 on:
   push:
@@ -114,24 +112,24 @@ jobs:
           fi
           if [ -n "${gtag}" ]; then
             if [ "${LINK_COMMITS}" = "1" ]; then
-              printf "## [\`%s\`](https://github.com/%s/tree/%s)\n\n" "${CURRENT_TAG}" "${GITHUB_REPOSITORY}" "${CURRENT_TAG}" >"${RELEASE_FILE}"
+              printf "## [\`%s\`](https://github.com/%s/tree/%s)\n\n" "${CURRENT_TAG}" "${GITHUB_REPOSITORY}" "${CURRENT_TAG}" >"/tmp/release.md"
             else
-              printf "## \`%s\`\n\n" "${CURRENT_TAG}" >"${RELEASE_FILE}"
+              printf "## \`%s\`\n\n" "${CURRENT_TAG}" >"/tmp/release.md"
             fi
           fi
           if [ "${grange}" != "0" ]; then
             if [ "${LINK_COMMITS}" = "1" ]; then
-              git log --oneline "${grange}" | awk -v repo="${GITHUB_REPOSITORY}" '{print "* [\`" substr($1, 1, 7) "\`](https://github.com/" repo "/commit/" substr($1, 1, 7) ") " substr($0, 9)}' >>"${RELEASE_FILE}"
+              git log --oneline "${grange}" | awk -v repo="${GITHUB_REPOSITORY}" '{print "* [\`" substr($1, 1, 7) "\`](https://github.com/" repo "/commit/" substr($1, 1, 7) ") " substr($0, 9)}' >>"/tmp/release.md"
             else
-              git log --oneline "${grange}" | sed 's/^/* /' >>"${RELEASE_FILE}"
+              git log --oneline "${grange}" | sed 's/^/* /' >>"/tmp/release.md"
             fi
-            echo "${CYN}[DONE] out: ${RELEASE_FILE}${NUK}"
+            echo "${CYN}[DONE] out: /tmp/release.md${NUK}"
             printf "${CYN}%s%*s${NUK}\n" "[OUT]" 85 "" | tr " " "~"
-            cat "${RELEASE_FILE}"
+            cat "/tmp/release.md"
             printf "${CYN}%s%*s${NUK}\n" "[OUT]" 85 "" | tr " " "~"
           else
             printf "%s[WARN]%s EMPTY release notes... no previous tag found and FALLBACK=0\n" "${YEL}" "${NUK}"
-            echo "" >"${RELEASE_FILE}"
+            echo "" >"/tmp/release.md"
           fi
 
       # create a create draft using the notes we generated in prv action
@@ -144,6 +142,6 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         with:
           artifacts: ${{env.ARTIFACTS}}
-          bodyFile : ${{env.RELEASE_FILE}}
+          bodyFile : /tmp/release.md
           draft    : true
           name     : Release ${{ github.ref_name }}
