@@ -3,7 +3,7 @@
 A brutally effective text preprocessor that uses comments as conditional directives. No need for separate `.template` files, no overly complicated DSL; just comments that do useful work.
 
 > Well-tested, isomorphic, dependency-free, slices and dices lines: ~300/µs, ~3,000/ms, and ~3,000,000/s;<br/>
-> But, as with anything [`RegExp`](https://en.wikipedia.org/wiki/Regular_expression), it's more like a well-oiled chainsaw than a surgical blade
+> But, as with anything [`RegExp`](https://en.wikipedia.org/wiki/Regular_expression), it's more like a well-oiled [ice sculpture](https://en.wikipedia.org/wiki/Ice_sculpture) chainsaw than a surgical blade
 
 
 
@@ -32,16 +32,16 @@ For example, replacing a string with an ENV variable is easy;
 Injecting an object function into an argument with an ENV variable, not so easy
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 // ###[IF]prod=1;un=comment;rm=comment;
-const anExample = (arg = [1,/* {aFn: () => ['dev']},*/ 2, 3]) => {
+const anExample = (arg = [1, /* {aFn: () => ['aHotArray']}, */ 2, 3]) => {
   // ###[IF]prod=0;sed=/80/3000/;
-  // ###[IF]prod=1;sed=/dev.api.com/api.fun/;
-  const str = 'https://dev.api.com:80'
+  // ###[IF]prod=1;sed=/localhost/api.fun/;
+  const str = 'https://localhost:80'
   return {str, arg};
 };
 
 
 /* @IF prod=1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-const anExample = (arg = [1, {aFn: () => ['dev']}, 2, 3]) => {
+const anExample = (arg = [1, {aFn: () => ['aHotArray']}, 2, 3]) => {
   const str = 'https://api.fun:80'
   return {str, arg};
 };
@@ -49,7 +49,7 @@ const anExample = (arg = [1, {aFn: () => ['dev']}, 2, 3]) => {
 
 /* @IF prod=0 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 const anExample = (arg = [1, 2, 3]) => {
-  const str = 'https://dev.api.com:3000'
+  const str = 'https://localhost:3000'
   return {str, arg};
 };
 ```
@@ -79,7 +79,7 @@ function commentDirective(
 
 type CommentOptions = {
   // id/match options
-  delimiter?: string;       // sed and sequence actions delimiter (default: '/')
+  delimiter?: string;       // sed and sequence delimiter (default: '/')
   identifier?: string;      // comment directive identifier (default: '###[IF]')
   // parse options
   escape?: boolean;         // escape regex patterns to match literal strings (default: true)
@@ -90,10 +90,14 @@ type CommentOptions = {
   // keep/preserve options
   keepDirective?: boolean;  // keep comment directive in output (default: false)
   keepEmpty?: boolean;      // keep/preserve removed empty comments/lines (default: false)
-  keepSpace?: boolean;      // keep/preserve whitespace without offset logic (default: false)
+  // keepPad* -> false=none; true=both; 1=single-only; 2=multi-only
+  keepPadStart?: boolean | 1 | 2, // start/leading whitespace for un/rm-comment (default: true)
+  keepPadIn?: boolean | 1 | 2,    // inside whitespace for un/rm-comment (default: 2)
+  keepPadEnd?: boolean | 1 | 2,   // end whitespace for un/rm-comment (default: 2)
+  keepPadEmpty?: boolean | 1 | 2, // empty-line whitespace-only for un/rm-comment (default: false) 
   // regex comment/language support options
-  multi: [start: RegExp | string, end: RegExp | string];
-  single: [start: RegExp | string, end?: null | RegExp | string];
+  multi?: [start: RegExp | string, end: RegExp | string];
+  single?: [start: RegExp | string, end?: null | RegExp | string];
 };
 ```
 > [!IMPORTANT]
@@ -393,7 +397,7 @@ import {
 // default c-like comment format (js/ts/c/rust/go/swift/kotlin/scala)
 const DEFAULT_OPTIONS: CommentOptions = {
   // regex comment/language support options
-  multi: [/\s*\/\*/, /\*\//],
+  multi: [/\s*\/\*/, /\*\/\s*/],
   single: [/\s*\/\/\s*/, null], // eating the surrounding space simplifies alignment
   // id/match options
   delimiter: '/',        // sed and sequence actions delimiter (default: '/')
@@ -407,7 +411,11 @@ const DEFAULT_OPTIONS: CommentOptions = {
   // keep/preserve options
   keepDirective: false,  // keep comment directive in output (default: false)
   keepEmpty: false,      // keep/preserve removed empty comments/lines (default: false)
-  keepSpace: false,      // keep original whitespace without adjustment (default: false)
+  // keepPad* ->  false=none; true=both; 1=single only; 2=multi only
+  keepPadStart: true,    // start/leading whitespace for un/rm-comment (default: true)
+  keepPadIn: 2,          // inside whitespace for un/rm-comment (default: 2)
+  keepPadEnd: 2,         // end whitespace for un/rm-comment (default: 2)
+  keepPadEmpty: false,   // empty-line whitespace-only for un/rm-comment (default: false) 
 };
 ```
 
@@ -478,6 +486,7 @@ let mathss = 1 / 2 / 3;`, {reg: 1}, {delimiter: '###'})
 let maths  = 1 + 2 + 3;
 let mathss = 1 / 2 / 3;`;
 ```
+<br />
 
 
 #### ▎`escape`
@@ -489,19 +498,20 @@ commentDirective(`
 123
 `.trim(), {reg: 1}, {escape: false}) === "456";
 ```
+<br />
 
 
 #### ▎`identifier`
 Changes the `'###[IF]'` comment directive identifier:
 
 ```ts
-// with keepSpace (default) 
 commentDirective(`
 // @@@[VROOOOOOOOOM]too=fast;rm=line;
 console.log('web fast');`, {
   too: 'fast'
 }, {identifier: '@@@[VROOOOOOOOOM]'}).trim() === "";
 ```
+<br />
 
 
 #### ▎`loose`
@@ -547,6 +557,7 @@ loging('loose');
 playing('fast');
 and('loose');
 ```
+<br />
 
 
 #### ▎`keepDirective`
@@ -566,6 +577,7 @@ console.log('what about the comments?');
 // ###[IF]nap=1;un=comment;
 console.log('what about the comments?');
 ```
+<br />
 
 
 #### ▎`keepEmpty`
@@ -597,44 +609,70 @@ console.debug('my whitespace');
 
 // #######################################
 ```
+<br />
+
+#### ▎`keepPad*`
+The `keepPad*` options control how whitespace `\s*` is handled by `(un|rm)=comment` with the values of:
+
++ `false` - whitespace is removed
++ `true ` - whitespace is kept for both `single` and `multi`
++ `1    ` - whitespace is kept for `single` only
++ `2    ` - whitespace is kept for `multi` only
 
 
-#### ▎`keepSpace`
-Keep the whitespace or, more accurately, disable the space offset logic, which may keep or remove whitespace depending on the comment RegExp:
+#### ⎸SYNTAX DEFINITIONS
+
+The behavior of `keepPad*` revolves around how whitespace is consumed/defined within the `RegExp`:
+
+```
+# single: [/\s*\/\/\s*/, null]
+  <keepPadStart>  //  <keepPadIn>  text
+
+# single: [/\s*\/\//, null]
+  <keepPadStart>  //   text
+
+# multi: [/\s*\/\*\s*/, /\s*\*\/\s*/]
+  <keepPadStart>  /*  <keepPadIn>  text  <keepPadIn>  */   <keepPadEnd>
+
+# multi: [/\s*\/\*/, /\*\//]
+  <keepPadStart>  /*   text   */
+
+# any (if whitespace-only empty-line)
+      <keepEmpty>       
+```
+
+#### ⎸EXAMPLE
 
 ```ts
-const whitespace = ' '.repeat(40);
-const result = commentDirective(`
-      // ###[IF]space=1;un=comment;${whitespace}
-      /*${whitespace}
-      let keep = 'space';${whitespace}
-      */
-      // ###[IF]space=1;un=comment;${whitespace}
-      // let space = 'keep';${whitespace}
-  `, {space: 1}, {keepDirective: false, keepSpace: false}).replaceAll(' ', '⠐');
+const whitespace = ' '.repeat(10);
+const input = `
+    // ###[IF]space=1;un=comment;
+    // let space = 'keep';${whitespace}
+    // ###[IF]space=1;un=comment;
+  1 /*${whitespace}
+    let keep = 'space';${whitespace}
+    */${whitespace}`;
 
+commentDirective(input, {space: 1}, {
+  keepPadEmpty: true, // keeps last empty line of whitespace
+  multi: [/\s*\/\*\s*/, /\s*\*\/\s*/],
+}).replaceAll(' ', '⠐') === `
+⠐⠐⠐⠐let⠐space⠐=⠐'keep';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
+⠐⠐1⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
+⠐⠐⠐⠐let⠐keep⠐=⠐'space';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
+⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐`);
 
-/* @keepSpace=false (default) ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-
-⠐⠐⠐⠐⠐⠐//⠐###[IF]space=1;un=comment;⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-
-⠐⠐⠐⠐⠐⠐let⠐keep⠐=⠐'space';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-
-⠐⠐⠐⠐⠐⠐//⠐###[IF]space=1;un=comment;⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐⠐⠐let⠐space⠐=⠐'keep';
-⠐⠐
-
-
-/* @keepSpace=true ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-
-⠐⠐⠐⠐⠐⠐//⠐###[IF]space=1;un=comment;⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐⠐⠐let⠐keep⠐=⠐'space';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐⠐⠐//⠐###[IF]space=1;un=comment;⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-let⠐space⠐=⠐'keep';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-⠐⠐
+commentDirective(input, {space: 1}, {
+  keepPadIn: false,
+  keepPadStart: false,
+  keepPadEnd: false,
+  multi: [/\s*\/\*\s*/, /\s*\*\/\s*/],
+}).replaceAll(' ', '⠐') === `
+let⠐space⠐=⠐'keep';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
+⠐⠐1
+⠐⠐⠐⠐let⠐keep⠐=⠐'space';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐\n`);
 ```
+<br/>
 
 
 #### ▎`nested`
@@ -698,7 +736,7 @@ const lesserFunction = (arg = ':('): number => {
 };
 ```
 
-Let's that the output `rexy=1` and reverse it with `rexy=0`:
+Let's take that the output of `rexy=1` and reverse it with `rexy=0`:
 
 ```ts
 /* @INPUT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
@@ -757,12 +795,13 @@ NOTE: alternatively, you could use the if/else syntax like so:
 ## Limitations
 
 [RegExp](https://en.wikipedia.org/wiki/Regular_expression).
-
+<br/>
+<br/>
 
 
 ## Development/Contributing
 
-Contributions, pull requests, and suggestions are welcome. To get started, ensure you have satisfied the [Bun](https://bun.sh) and [Make](https://www.gnu.org/software/make/manual/make.html) build dependencies.
+Contributions, pull requests, and suggestions are appreciated. First, make sure you have installed and configured the required build dependencies: [Bun](https://bun.sh) and [Make](https://www.gnu.org/software/make/manual/make.html). 
 
 
 #### ▎PULL REQUEST STEPS

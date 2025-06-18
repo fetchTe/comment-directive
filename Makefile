@@ -19,7 +19,7 @@ ENT = $(SRC)/index.ts $(SRC)/lang.ts
 # build/output dir
 DST = $(CURDIR)/dist
 # test(s) (if not defined, recursive test search: bun.sh/docs/cli/test#run-tests)
-TES = $(SRC)/index.test.ts $(SRC)/index.keep.test.ts $(SRC)/README.test.ts
+TES = $(SRC)/index.test.ts $(SRC)/index.keep.test.ts $(SRC)/index.pad.test.ts $(SRC)/README.test.ts
 # node/binaries (tsc, eslint)
 NOM = $(CURDIR)/node_modules
 BIN = $(NOM)/.bin

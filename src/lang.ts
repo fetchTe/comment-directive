@@ -11,11 +11,11 @@ export const erlangSingle: CmtTupleP = [/\s*%\s*/, null];
 export const sqlSingle: CmtTupleP = [/\s*--\s+/, null];
 export const lispSingle: CmtTupleP = [/\s*;\s*/, null];
 // multi
-export const parensMulti: CmtTupleF = [/\s*\(\*/, /\*\)/];
-export const cLikeMulti: CmtTupleF = [/\s*\/\*/, /\*\//];
-export const htmlMulti: CmtTupleF = [/\s*<!--/, /-->/];
-export const jsxMulti: CmtTupleF = [/\s*\{\/\*/, /\*\/\}/];
-export const lispMulti: CmtTupleF = [/\s*#\|/, /\|#/];
+export const parensMulti: CmtTupleF = [/\s*\(\*/, /\*\)\s*/];
+export const cLikeMulti: CmtTupleF = [/\s*\/\*/, /\*\/\s*/];
+export const htmlMulti: CmtTupleF = [/\s*<!--/, /-->\s*/];
+export const jsxMulti: CmtTupleF = [/\s*\{\/\*/, /\*\/\}\s*/];
+export const lispMulti: CmtTupleF = [/\s*#\|/, /\|#\s*/];
 
 // c-like
 export const cLike: CommentOptions = {
@@ -136,7 +136,7 @@ can be nested {- like this -}
 ***************************************************************************** */
 export const haskell: CommentOptions = {
   single: sqlSingle,
-  multi: [/\s*\{-/, /-\}/],
+  multi: [/\s*\{-/, /-\}\s*/],
 };
 
 
@@ -151,7 +151,7 @@ block style
 export const powershell: CommentOptions = {
   single: hashLikeSingle,
   // multi-line (block) comments use <# ... #>
-  multi: [/\s*<#/, /#>/],
+  multi: [/\s*<#/, /#>\s*/],
 };
 
 

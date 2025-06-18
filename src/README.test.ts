@@ -711,7 +711,7 @@ line2`;
     });
   });
 
-  describe('keepSpace', () => {
+  describe('keepPad', () => {
     const KEEP_SPACE_INPUT = `
 <div>
   {/* ###[IF]ui=1;un=comment; */}
@@ -725,44 +725,61 @@ line2`;
 </div>`;
     const KEEP_SPACE_TRUE_EXPECTED = `
 <div>
-<UI />${' '}
+<UI />
   <OtherJunk />
 </div>`;
 
 
-    test('keepSpace variations', () => {
+    test('keepPad variations', () => {
       expect(commentDirective(KEEP_SPACE_INPUT, { ui: 1 }, {
         single: [/^\s*\{\/\*\s*/, /\*\/\}/],
-        multi: [/^\s*\{\/\*\s*/, /\*\/\}/],
-        keepSpace: false,
+        multi: [/^\s*\{\/\*\s*/, /\s*\*\/\}/],
+        keepPadIn: false,
+        keepPadStart: true,
       })).toEqual(KEEP_SPACE_FALSE_EXPECTED);
 
       expect(commentDirective(KEEP_SPACE_INPUT, { ui: 1 }, {
         single: [/^\s*\{\/\*\s*/, /\*\/\}/],
-        multi: [/^\s*\{\/\*\s*/, /\*\/\}/],
-        keepSpace: true,
+        multi: [/^\s*\{\/\*\s*/, /\s*\*\/\}/],
+        keepPadIn: false,
+        keepPadStart: false,
       })).toEqual(KEEP_SPACE_TRUE_EXPECTED);
     });
 
 
-    const KEEP_SPACE_INDENT_INPUT = `
-    // ###[IF]test=1;un=comment;
-    // const indented = true;
-  const lessIndented = true;`;
-    const KEEP_SPACE_INDENT_FALSE_EXPECTED = `
-    const indented = true;
-  const lessIndented = true;`;
-    const KEEP_SPACE_INDENT_TRUE_EXPECTED = `
-const indented = true;
-  const lessIndented = true;`;
+    test('keepPad Example', () => {
 
-    test('keepSpace with different indentation levels', () => {
-      expect(commentDirective(KEEP_SPACE_INDENT_INPUT, { test: 1 }, { keepSpace: false }))
-        .toEqual(KEEP_SPACE_INDENT_FALSE_EXPECTED);
+      const whitespace = ' '.repeat(10);
+      const input = `
+    // ###[IF]space=1;un=comment;
+    // let space = 'keep';${whitespace}
+    // ###[IF]space=1;un=comment;
+  1 /*${whitespace}
+    let keep = 'space';${whitespace}
+    */${whitespace}`;
 
-      expect(commentDirective(KEEP_SPACE_INDENT_INPUT, { test: 1 }, { keepSpace: true }))
-        .toEqual(KEEP_SPACE_INDENT_TRUE_EXPECTED);
+      expect(commentDirective(input, {space: 1}, {
+        multi: [/\s*\/\*\s*/, /\s*\*\/\s*/],
+        keepPadEmpty: true,
+      }).replaceAll(' ', '⠐') === `
+⠐⠐⠐⠐let⠐space⠐=⠐'keep';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
+⠐⠐1⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
+⠐⠐⠐⠐let⠐keep⠐=⠐'space';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
+⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐`).toBe(true);
+
+      expect(commentDirective(input, {space: 1}, {
+        keepPadIn: false,
+        keepPadStart: false,
+        keepPadEnd: false,
+        multi: [/\s*\/\*\s*/, /\s*\*\/\s*/],
+      }).replaceAll(' ', '⠐') === `
+let⠐space⠐=⠐'keep';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
+⠐⠐1
+⠐⠐⠐⠐let⠐keep⠐=⠐'space';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐\n`).toBe(true);
+
     });
+
+
   });
 
   describe('keepDirective', () => {
