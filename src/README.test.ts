@@ -362,6 +362,42 @@ brown fox jumps over the the quick`.trim();
   });
 });
 
+describe('fn', () => {
+  test('basic example', () => {
+
+    const input = `
+    // ###[IF]dist=1;fn=distTo;fn=distFrom;
+    import { commentDirective } from './index.ts';
+    import { type CommentOptions } from './index.ts';`;
+
+    type FnAction = (input: (string | number)[], id: string, idx: number)=> (string | number)[];
+    const fn: FnAction = (input, id, _idx) => input.map(line => {
+      if (id === 'distTo') {
+        return String(line).replace(`'./`, `'../dist/`).replace('.ts', '.js');
+      }
+      if (id === 'distFrom') {
+        return String(line).replace('../dist/', './').replace('.js', '.ts');
+      }
+      return line;
+    });
+
+    const opts = {keepDirective: true, fn};
+    const once   = commentDirective(input, {dist: 1}, opts);
+    const twice  = commentDirective(once, {dist: 1}, opts);
+    const thrice = commentDirective(twice, {dist: 0}, opts);
+
+    // thrice undoes twice and matches the original input
+    expect(input === thrice).toBe(true);
+    expect(twice !== input).toBe(true);
+    // twice matches once
+    expect(once === twice && twice === `
+    // ###[IF]dist=1;fn=distTo;fn=distFrom;
+    import { commentDirective } from '../dist/index.js';
+    import { type CommentOptions } from './index.ts';`).toBe(true);
+
+  });
+});
+
 describe('Language Support', () => {
   const LANG_PYTHON_INPUT = `
 # ###[IF]python=1;un=comment;

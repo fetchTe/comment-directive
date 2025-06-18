@@ -234,6 +234,134 @@ describe('options', () => {
 
 });
 
+
+// -----------------------------------------------------------------------------
+// @id::fn
+// -----------------------------------------------------------------------------
+describe('fn', () => {
+  type FnAction = (input: (string | number)[], id: string, idx: number)=> (string | number)[];
+  const fn: FnAction = (input, id, _idx) => input.map(line => {
+    if (id === 'distTo') {
+      return String(line).replace(`'./`, `'../dist/`).replace('.ts', '.js');
+    }
+    if (id === 'distFrom') {
+      return String(line).replace('../dist/', './').replace('.js', '.ts');
+    }
+    return line;
+  });
+  const opts = {keepDirective: true, fn};
+
+  const FN_INPUT = `
+  // ###[IF]dist=1;fn=distTo;fn=distFrom;
+  import { commentDirective } from './index.ts';
+  // ###[IF]dist=1;fn=distTo;fn=distFrom;
+  import { css } from './lang.ts';
+  import { type CommentOptions } from './index.ts';
+  `;
+  const FN_OUTPUT = `
+  // ###[IF]dist=1;fn=distTo;fn=distFrom;
+  import { commentDirective } from '../dist/index.js';
+  // ###[IF]dist=1;fn=distTo;fn=distFrom;
+  import { css } from '../dist/lang.js';
+  import { type CommentOptions } from './index.ts';
+  `;
+
+  const FN_RES = commentDirective(FN_INPUT, {dist: 1}, opts);
+  const FN_RES_REV = commentDirective(FN_RES, {dist: 0}, opts);
+  test('fn default', () => {
+    expect(FN_RES).toEqual(FN_OUTPUT);
+    expect(FN_RES_REV).toEqual(FN_INPUT);
+  });
+
+  const FN_NL_INPUT = `
+  // ###[IF]dist=1;fn=distTo/2L;fn=distFrom/2L;
+  import { commentDirective } from './index.ts';
+  import { css } from './lang.ts';
+  import { type CommentOptions } from './index.ts';
+  `;
+  const FN_NL_OUTPUT = `
+  // ###[IF]dist=1;fn=distTo/2L;fn=distFrom/2L;
+  import { commentDirective } from '../dist/index.js';
+  import { css } from '../dist/lang.js';
+  import { type CommentOptions } from './index.ts';
+  `;
+
+  const FN_NL_RES = commentDirective(FN_NL_INPUT, {dist: 1}, opts);
+  const FN_NL_RES_REV = commentDirective(FN_NL_RES, {dist: 0}, opts);
+  test('fn multi-line', () => {
+    expect(FN_NL_RES).toEqual(FN_NL_OUTPUT);
+    expect(FN_NL_RES_REV).toEqual(FN_NL_INPUT);
+  });
+
+  const FN_NL_ALT_INPUT = `
+  // ###[IF]dist=1;fn=distTo2L;fn=distFrom2L;
+  import { commentDirective } from './index.ts';
+  import { css } from './lang.ts';
+  import { type CommentOptions } from './index.ts';
+  `;
+  const FN_NL_ALT_OUTPUT = `
+  // ###[IF]dist=1;fn=distTo2L;fn=distFrom2L;
+  import { commentDirective } from '../dist/index.js';
+  import { css } from '../dist/lang.js';
+  import { type CommentOptions } from './index.ts';
+  `;
+
+  const FN_NL_ALT_RES = commentDirective(FN_NL_ALT_INPUT, {dist: 1}, opts);
+  const FN_NL_ALT_RES_REV = commentDirective(FN_NL_ALT_RES, {dist: 0}, opts);
+  test('fn multi-line alt', () => {
+    expect(FN_NL_ALT_RES).toEqual(FN_NL_ALT_OUTPUT);
+    expect(FN_NL_ALT_RES_REV).toEqual(FN_NL_ALT_INPUT);
+  });
+
+
+  const FN_STOP_1_INPUT = `
+  // ###[IF]dist=1;fn=distTo/@//#STOP;fn=distFrom/@//#STOP;
+  import { commentDirective } from './index.ts';
+  //#STOP
+  import { css } from './lang.ts';
+  import { type CommentOptions } from './index.ts';
+  `;
+  const FN_STOP_1_OUTPUT = `
+  // ###[IF]dist=1;fn=distTo/@//#STOP;fn=distFrom/@//#STOP;
+  import { commentDirective } from '../dist/index.js';
+  //#STOP
+  import { css } from './lang.ts';
+  import { type CommentOptions } from './index.ts';
+  `;
+
+  const FN_STOP_1_RES = commentDirective(FN_STOP_1_INPUT, {dist: 1}, opts);
+  const FN_STOP_1_RES_REV = commentDirective(FN_STOP_1_RES, {dist: 0}, opts);
+  test('fn stop marker (full line)', () => {
+    expect(FN_STOP_1_RES).toEqual(FN_STOP_1_OUTPUT);
+    expect(FN_STOP_1_RES_REV).toEqual(FN_STOP_1_INPUT);
+  });
+
+
+  const FN_STOP_2_INPUT = `
+  // ###[IF]dist=1;fn=distTo/@//#STOP;fn=distFrom/@//#STOP;
+  import { commentDirective } from './index.ts';
+  import { css } from './lang.ts';
+  @//#STOP
+  import { type CommentOptions } from './index.ts';
+  `;
+  const FN_STOP_2_OUTPUT = `
+  // ###[IF]dist=1;fn=distTo/@//#STOP;fn=distFrom/@//#STOP;
+  import { commentDirective } from '../dist/index.js';
+  import { css } from '../dist/lang.js';
+  @//#STOP
+  import { type CommentOptions } from './index.ts';
+  `;
+
+  const FN_STOP_2_RES = commentDirective(FN_STOP_2_INPUT, {dist: 1}, opts);
+  const FN_STOP_2_RES_REV = commentDirective(FN_STOP_2_RES, {dist: 0}, opts);
+  test('fn stop marker (contains)', () => {
+    expect(FN_STOP_2_RES).toEqual(FN_STOP_2_OUTPUT);
+    expect(FN_STOP_2_RES_REV).toEqual(FN_STOP_2_INPUT);
+  });
+
+});
+
+
 // -----------------------------------------------------------------------------
 // @id::sed
 // -----------------------------------------------------------------------------

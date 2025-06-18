@@ -95,6 +95,8 @@ type CommentOptions = {
   keepPadIn?: boolean | 1 | 2,    // inside whitespace for un/rm-comment (default: 2)
   keepPadEnd?: boolean | 1 | 2,   // end whitespace for un/rm-comment (default: 2)
   keepPadEmpty?: boolean | 1 | 2, // empty-line whitespace-only for un/rm-comment (default: false) 
+  // 'fn' action/comment directive consumer (default: I => I)
+  fn?: (input: (string | number)[], id: string, idx: number)=> (string | number)[];
   // regex comment/language support options
   multi?: [start: RegExp | string, end: RegExp | string];
   single?: [start: RegExp | string, end?: null | RegExp | string];
@@ -136,6 +138,7 @@ Directives are executed top-to-bottom and can be "[stacked](#stacked)" on top of
 
 #### ▎`rm=<N>L`
 Removes the next `N` lines, such as `rm=3L` removes the next 3 lines:
+
 
 ```ts
 /* @INPUT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
@@ -180,6 +183,42 @@ debug('the bugs');
 debug('debug all');
 debug('the bugs');
 // another comment
+```
+<br/>
+
+
+#### ▎`fn=<id>/[<N>L][@<stop>]`
+The `fn` directive, along with the matching `fn` [option](#api) function, offers a way to override the output of the next line, a span of `<N>` lines, or up to `@<stop>`. Basically, an escape hatch for custom logic.
+
+```ts
+const input = `
+// ###[IF]dist=1;fn=distTo;fn=distFrom;
+import { commentDirective } from './index.ts';
+import { type CommentOptions } from './index.ts';`;
+
+type FnAction = (input: (string | number)[], id: string, idx: number)=> (string | number)[];
+const fn: FnAction = (input, id, _idx) => input.map(line => {
+  if (id === 'distTo') {
+    return String(line).replace(`'./`, `'../dist/`).replace('.ts', '.js');
+  }
+  if (id === 'distFrom') {
+    return String(line).replace('../dist/', './').replace('.js', '.ts');
+  }
+  return line;
+});
+
+const options = {keepDirective: true, fn};
+const once    = commentDirective(input, {dist: 1}, options);
+const twice   = commentDirective(once,  {dist: 1}, options);
+const thrice  = commentDirective(twice, {dist: 0}, options);
+
+// thrice undoes twice and matches the original input
+let isTrue = input === thrice;
+// twice matches once, i.e: it didn't re-change the code
+isTrue = once === twice && twice === `
+// ###[IF]dist=1;fn=distTo;fn=distFrom;
+import { commentDirective } from '../dist/index.js';
+import { type CommentOptions } from './index.ts';`;
 ```
 <br/>
 
@@ -416,6 +455,7 @@ const DEFAULT_OPTIONS: CommentOptions = {
   keepPadIn: 2,          // inside whitespace for un/rm-comment (default: 2)
   keepPadEnd: 2,         // end whitespace for un/rm-comment (default: 2)
   keepPadEmpty: false,   // empty-line whitespace-only for un/rm-comment (default: false) 
+  fn: (input, _id, _idx) => input, // 'fn' comment directive consumer
 };
 ```
 
@@ -546,6 +586,7 @@ console.log('i stay');
 ```
 
 If you like to play fast and `loose`, you can also stack directives:
+
 ```ts
 /* @INPUT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 // ###[IF]loose=1;sed=/log/play/;
@@ -611,6 +652,7 @@ console.debug('my whitespace');
 ```
 <br />
 
+
 #### ▎`keepPad*`
 The `keepPad*` options control how whitespace `\s*` is handled by `(un|rm)=comment` with the values of:
 
@@ -621,7 +663,6 @@ The `keepPad*` options control how whitespace `\s*` is handled by `(un|rm)=comme
 
 
 #### ⎸SYNTAX DEFINITIONS
-
 The behavior of `keepPad*` revolves around how whitespace is consumed/defined within the `RegExp`:
 
 ```
@@ -640,6 +681,7 @@ The behavior of `keepPad*` revolves around how whitespace is consumed/defined wi
 # any (if whitespace-only empty-line)
       <keepEmpty>       
 ```
+
 
 #### ⎸EXAMPLE
 
@@ -797,6 +839,7 @@ NOTE: alternatively, you could use the if/else syntax like so:
 [RegExp](https://en.wikipedia.org/wiki/Regular_expression).
 <br/>
 <br/>
+
 
 
 ## Development/Contributing

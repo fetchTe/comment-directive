@@ -4,6 +4,7 @@
 
 // maps short action codes to their full names
 const ACT_MAP = {
+  fn: 'fn',
   rml: 'rm_line',
   rmc: 'rm_comment',
   unc: 'un_comment',
@@ -18,7 +19,7 @@ const ACT_MAP = {
 
 // list of valid action prefixes for parsing
 // eslint-disable-next-line @stylistic/max-len
-const ACT_PREFIXS = ['rm=', 'un=', 'sed=', 'append=', 'prepend=', 'unshift=', 'push=', 'shift=', 'pop='] as const;
+const ACT_PREFIXS = ['rm=', 'un=', 'sed=', 'fn=', 'append=', 'prepend=', 'unshift=', 'push=', 'shift=', 'pop='] as const;
 
 // sequence-based actions
 const ACT_SEQ_ARR = ['append', 'prepend', 'unshift', 'push', 'shift', 'pop'] as const;
@@ -45,6 +46,7 @@ export const DEFAULT_OPTIONS: CommentOptionsR = {
   // regex comment/language support options
   multi: [/\s*\/\*/, /\*\/\s*/],
   single: [/\s*\/\/\s*/, null], // eating the starting/surrounding space simplifies alignment
+  fn: (input, _id, _idx) => input, // 'fn' comment directive consumer
 };
 
 const LOOSE_PLACEHOLE = '_CMT_l00S3_';
@@ -81,9 +83,11 @@ export type CommentOptions = {
   /* empty-line whitespace-only control for un/rm-comment (default: false) */
   keepPadEmpty?: boolean | 1 | 2,
   /* multi-line comment/language support (default: c-like) */
-  multi: [start: RegExp | string, end: RegExp | string] | [start: null, end: null];
+  multi?: [start: RegExp | string, end: RegExp | string] | [start: null, end: null];
   /* single-line comment/language support (default: c-like) */
-  single: [start: RegExp | string, end?: null | RegExp | string];
+  single?: [start: RegExp | string, end?: null | RegExp | string];
+  /* 'fn' comment directive consumer (default: I => I) */
+  fn?: (input: (string | number)[], id: string, idx: number)=> (string | number)[];
 };
 
 // CommentOptions [R]equired
@@ -103,6 +107,13 @@ export type ActionRemoveLines = { type: ActMap['rml']; count: number; };
 export type ActionRemoveComment = { type: ActMap['rmc']; count: number; };
 
 export type ActionUnComment = { type: ActMap['unc']; count: number; };
+
+export type ActionFunction = {
+  type: ActMap['fn'];
+  count: number;
+  stop: null | string;
+  val: string;
+};
 
 export type ActionSedReplace = {
   type: ActMap['sed'];
@@ -148,7 +159,7 @@ export type ActionPop = {
 export type ActionSequence = ActionAppend | ActionPrepend | ActionShift | ActionPrepend | ActionPop;
 
 export type Actions = ActionRemoveLines | ActionRemoveComment | ActionUnComment
-| ActionSedReplace | ActionSequence;
+| ActionSedReplace | ActionSequence | ActionFunction;
 
 
 // parsed comment directive
@@ -369,7 +380,8 @@ const parseAction = (() => {
       cache = options.disableCache ? null : cache;
     }
     // check cache
-    if (cache && cache.has(spec)) { return cache.get(spec)!; }
+    const cres = cache ? cache.get(spec) : null;
+    if (cres) { return cres; }
 
     let split: null | [string, string] = null;
     for (const iact of ACT_PREFIXS) {
@@ -411,7 +423,7 @@ const parseAction = (() => {
     }
 
     // append/prepend/shift/pop
-    if (isSeqActionType(act)) {
+    if (isSeqActionType(act) || act === 'fn') {
       let seq = param;
       let stop = null;
 
@@ -433,6 +445,12 @@ const parseAction = (() => {
       const val = seq;
       if (!val && act !== 'pop' && act !== 'shift') {
         const err = `[commentDirective:parseAction] no ${act} 'value' found: ${param}`;
+        if (options.throw) { throw new Error(err); }
+        console.error(err);
+        return null;
+      }
+      if (act === 'fn' && typeof options.fn !== 'function') {
+        const err = `[commentDirective:parseAction] no 'fn' function found in options`;
         if (options.throw) { throw new Error(err); }
         console.error(err);
         return null;
@@ -646,12 +664,30 @@ const applyDirective = (
       // stop break
       if (reStop && sline && sline.match(reStop)) { break; }
     }
-    // copy remaining lines in the range without modification
-    while (jdx < lines.length && processedLines < count) {
-      out.push(lines[jdx] ?? '');
+    return jdx - 1;
+  }
+
+  // custom fn
+  if (action.type === ACT_MAP.fn) {
+    const {
+      count,
+      stop,
+      val,
+    } = action;
+    const reStop = stop ? new RegExp(toEscapedPattern(stop, options.escape)) : null;
+    // loop and replace till count or stop
+    let processedLines = 0;
+    const input: (string | number)[] = [];
+    const start = jdx;
+    while (jdx < lines.length && (processedLines < count || stop)) {
+      const currentLine = lines[jdx] ?? '';
+      input.push(lines[jdx] ?? '');
       jdx++;
       processedLines++;
+      if (reStop && isString(currentLine) && currentLine.match(reStop)) { break; }
     }
+    const output = options?.fn ? options?.fn(input, val, start) : input;
+    output.forEach(val => out.push(val));
     return jdx - 1;
   }
 
@@ -1128,4 +1164,3 @@ export const commentDirective = (
 };
 
 export default commentDirective;
-
