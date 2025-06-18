@@ -55,8 +55,8 @@ DEBUG ?= 0
 LOG ?= 1
 #! [?0] disables color logging/ANSI codes
 NO_COLOR ?= 0
-#! [?mjs|js] default esm build extension
-EXE ?= mjs
+#! [?js|mjs] default esm build extension
+EXE ?= js
 #! [?DEV|PROD|TEST] sets the 'ENV' and 'IS_*' static build variables
 ENV ?= DEV
 
