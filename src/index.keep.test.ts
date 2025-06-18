@@ -67,7 +67,7 @@ describe('options', () => {
 
     const UNHOLY_NESTING_OUT = `
       // ###[IF]test=0;un=comment;
- /* dont remove me */  
+       /* dont remove me */  
 
       // ###[IF]test=0;un=comment;
 
@@ -80,7 +80,7 @@ describe('options', () => {
 
 
       // ###[IF]test=0;un=comment;
- /* dont remove me */ 
+       /* dont remove me */ 
 
 
 
@@ -232,70 +232,6 @@ describe('options', () => {
   });
 
 
-  test('no keepSpace', () => {
-    const SPACY = `
-      // ###[IF]test=0;un=comment;
-      /* throw                                                                */
-      /* throw                                                                */
-    `;
-    // since '\s*\/\*' is the regex it eats the space
-    const SPACY_NO_ADJ = `
-      // ###[IF]test=0;un=comment;
- throw                                                                
-      /* throw                                                                */
-    `;
-    const SPACY_ADJ = `
-       throw
-      /* throw                                                                */
-    `;
-    expect(commentDirective(SPACY, {test: 0}, {
-      multi: [/\s*\/\*/, /\*\//],
-      keepSpace: true,
-      keepDirective: true,
-    })).toBe(SPACY_NO_ADJ);
-    expect(commentDirective(SPACY, {test: 0}, {
-      multi: [/\s*\/\*/, /\*\//],
-    })).toBe(SPACY_ADJ);
-
-
-    const whitespace = ' '.repeat(40);
-    const KEEP_THE_SPACE = `
-      // ###[IF]space=1;un=comment;${whitespace}
-      /*${whitespace}
-      let keep = 'space';${whitespace}
-      */
-      // ###[IF]space=1;un=comment;${whitespace}
-      // let space = 'keep';${whitespace}
-    `;
-    const KEEP_THE_SPACE_FALSE = `
-⠐⠐⠐⠐⠐⠐//⠐###[IF]space=1;un=comment;⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-
-⠐⠐⠐⠐⠐⠐let⠐keep⠐=⠐'space';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-
-⠐⠐⠐⠐⠐⠐//⠐###[IF]space=1;un=comment;⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐⠐⠐let⠐space⠐=⠐'keep';
-⠐⠐⠐⠐`;
-    const KEEP_THE_SPACE_TRUE = `
-⠐⠐⠐⠐⠐⠐//⠐###[IF]space=1;un=comment;⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐⠐⠐let⠐keep⠐=⠐'space';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐⠐⠐//⠐###[IF]space=1;un=comment;⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-let⠐space⠐=⠐'keep';⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐⠐
-⠐⠐⠐⠐`;
-
-    expect(commentDirective(KEEP_THE_SPACE, { space: 1}, {
-      keepDirective: true,
-      keepSpace: true,
-    }).replaceAll(' ', '⠐')).toBe(KEEP_THE_SPACE_TRUE);
-
-    expect(commentDirective(KEEP_THE_SPACE, { space: 1}, {
-      keepDirective: true,
-      keepSpace: false,
-    }).replaceAll(' ', '⠐')).toBe(KEEP_THE_SPACE_FALSE);
-
-
-  });
 });
 
 // -----------------------------------------------------------------------------
@@ -990,7 +926,6 @@ console.log('3333');
 console.log('4444');`;
 
 
-
     const RM_STACKCASE_OUT_3 = `
 // ###[IF]test=0;sed=/0/1/;sed=/0/2/;
 // ###[IF]test=0;sed=/0/1/;sed=/0/2/;
@@ -1046,7 +981,6 @@ console.log('4444');`;
 
 
   });
-
 
 
   const RM_LINES_INPUT = `
@@ -1297,19 +1231,19 @@ describe('remove comments', () => {
     expect(commentDirective(
       RM_COMMENT_INLINE_MULTI_INPUT,
       { debug: 0 },
-      { keepDirective: true },
+      { keepDirective: true, keepPadStart: false },
     )).toEqual(RM_COMMENT_INLINE_MULTI_EXPECTED_0);
 
     expect(commentDirective(
       RM_COMMENT_INLINE_MULTI_INPUT,
       { debug: 1 },
-      { keepDirective: true },
+      { keepDirective: true, keepPadStart: false },
     )).toEqual(RM_COMMENT_INLINE_MULTI_EXPECTED_1);
 
     expect(commentDirective(
       RM_COMMENT_INLINE_MULTI_INPUT,
       { debug: 2 },
-      { keepDirective: true },
+      { keepDirective: true, keepPadStart: false },
     )).toEqual(RM_COMMENT_INLINE_MULTI_EXPECTED_2);
   });
 
@@ -1373,7 +1307,7 @@ describe('remove comments', () => {
     expect(commentDirective(
       RM_COMMENT_INLINE_INPUT,
       { clean: 1 },
-      { keepDirective: true },
+      { keepDirective: true, keepPadStart: false },
     )).toEqual(RM_COMMENT_INLINE_EXPECTED);
 
   });
@@ -1401,7 +1335,7 @@ describe('uncomment', () => {
   const UNCOMMENT_SINGLE_LINE_INPUT = `
     line1
     // ###[IF]debug=1;un=comment;
-    /*console.log('debug'); */
+    /*console.log('debug');*/
     line2`;
 
   const UNCOMMENT_SINGLE_LINE_TRUE_EXPECTED = `
@@ -1413,7 +1347,7 @@ describe('uncomment', () => {
   const UNCOMMENT_SINGLE_LINE_FALSE_EXPECTED = `
     line1
     // ###[IF]debug=1;un=comment;
-    /*console.log('debug'); */
+    /*console.log('debug');*/
     line2`;
 
   test('uncomment single-line comment', () => {
@@ -1942,7 +1876,7 @@ some content`;
 
   const WHITESPACE_ADJUST_A_INPUT = `
 // ###[IF]case=1;un=comment;
-  /* some content */`;
+  /* some content*/`;
   const WHITESPACE_ADJUST_B_INPUT = `
 // ###[IF]case=1;un=comment;
    /*some content*/`;
@@ -2170,7 +2104,7 @@ const config = {
   debug: true,
   // ###[IF]env=development;un=comment;
   // ###[IF]env=production;rm=1L;
-  /*verbose: true */
+  /*verbose: true*/
 };`;
   const BUILD_CONFIG_SWITCHING_PROD_EXPECTED = `
 // ###[IF]env=production;sed=/development.api.com/production.api.com/g;
@@ -2281,13 +2215,13 @@ const config = {
     expect(commentDirective(
       COMPLEX_TEMPLATE_INPUT,
       { is_fg: 1 },
-      { keepDirective: true },
+      { keepDirective: true, multi: [/\s*\/\*/, /\s*\*\/\s*/], keepPadIn: false },
     )).toEqual(COMPLEX_TEMPLATE_IS_FG_TRUE_EXPECTED);
 
     expect(commentDirective(
       COMPLEX_TEMPLATE_INPUT,
       { is_fg: 0 },
-      { keepDirective: true },
+      { keepDirective: true, multi: [/\s*\/\*/, /\s*\*\/\s*/], keepPadIn: false },
     )).toEqual(COMPLEX_TEMPLATE_IS_FG_FALSE_EXPECTED);
   });
 
@@ -2313,7 +2247,7 @@ class MyComponent {
     return (
       <div>
         {/* ###[IF]feature_new_ui=1;un=comment; */}
-         <NewUIComponent /> 
+        <NewUIComponent />
         {/* ###[IF]feature_new_ui=1;rm=2L; */}
       </div>
     );
@@ -2341,9 +2275,9 @@ class MyComponent {
       FEATURE_FLAG_MANAGEMENT_INPUT,
       { feature_new_ui: 1 },
       {
-        single: [/\{\/\*s*/, /s*\*\/\}/],
-        multi: [/\{\/\*/, /\*\/\}/],
-        keepSpace: true,
+        single: [/\{\/\*\s*/, /\s*\*\/\}/],
+        multi: [/\{\/\*\s*/, /\s*\*\/\}/],
+        keepPadIn: false,
         keepDirective: true,
       },
     )).toEqual(FEATURE_FLAG_MANAGEMENT_NEW_UI_EXPECTED);
@@ -2352,12 +2286,13 @@ class MyComponent {
       FEATURE_FLAG_MANAGEMENT_INPUT,
       { feature_new_ui: 0 },
       {
-        single: [/\{\/\*s*/, /s*\*\/\}/],
-        multi: [/\{\/\*/, /\*\/\}/],
-        keepSpace: true,
+        single: [/\{\/\*\s*/, /\s*\*\/\}/],
+        multi: [/\{\/\*\s*/, /\s*\*\/\}/],
+        keepPadIn: false,
         keepDirective: true,
       },
     )).toEqual(FEATURE_FLAG_MANAGEMENT_OLD_UI_EXPECTED);
+
   });
 
 });
@@ -2644,7 +2579,7 @@ describe('Bot Examples', () => {
       // ###[IF]env=production;un=comment;rm=comment;
       // compressionEnabled: true,
       // ###[IF]env=development;un=comment;rm=comment;
-      /*hotReload: true, */
+      /*hotReload: true,*/
     };
     `;
   const BOT_ADV_BUILD_CONFIG_DEV_EXPECTED = `

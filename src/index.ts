@@ -37,12 +37,17 @@ export const DEFAULT_OPTIONS: CommentOptionsR = {
   // keep/preserve options
   keepDirective: false,  // keep comment directive in output (default: false)
   keepEmpty: false,      // keep/preserve removed empty comments/lines (default: false)
-  keepSpace: false,      // keep original whitespace without adjustment (default: false)
+  // keepPad* ->  false=none; true=both; 1=single only; 2=multi only
+  keepPadStart: true,    // start/leading whitespace for un/rm-comment (default: true)
+  keepPadIn: 2,          // inside whitespace for un/rm-comment (default: 2)
+  keepPadEnd: 2,         // end whitespace for un/rm-comment (default: 2)
+  keepPadEmpty: false,   // empty-line whitespace-only for un/rm-comment (default: false) 
   // regex comment/language support options
-  multi: [/\s*\/\*/, /\*\//],
+  multi: [/\s*\/\*/, /\*\/\s*/],
   single: [/\s*\/\/\s*/, null], // eating the starting/surrounding space simplifies alignment
 };
 
+const LOOSE_PLACEHOLE = '_CMT_l00S3_';
 
 // -----------------------------------------------------------------------------
 // @id::types
@@ -63,12 +68,18 @@ export type CommentOptions = {
   throw?: boolean;
   /* escape regex patterns to match literal strings (default: true) */
   escape?: boolean;
-  /* disable white-space logic when removing/uncommenting (default: false) */
-  keepSpace?: boolean;
   /* keep directive comments in the output (default: false) */
   keepDirective?: boolean;
   /* preserve empty removed comment/lines/directive lines (default: false) */
   keepEmpty?: boolean;
+  /* start/leading whitespace control for un/rm-comment (default: true) */
+  keepPadStart?: boolean | 1 | 2,
+  /* inside whitespace control for un/rm-comment (default: 2) */
+  keepPadIn?: boolean | 1 | 2,
+  /* end whitespace control for un/rm-comment (default: 2) */
+  keepPadEnd?: boolean | 1 | 2,
+  /* empty-line whitespace-only control for un/rm-comment (default: false) */
+  keepPadEmpty?: boolean | 1 | 2,
   /* multi-line comment/language support (default: c-like) */
   multi: [start: RegExp | string, end: RegExp | string] | [start: null, end: null];
   /* single-line comment/language support (default: c-like) */
@@ -587,9 +598,9 @@ const applyDirective = (
   options: CommentOptionsR,
   re: ReDirective,
 ): number => {
-  const ekeep = options?.keepEmpty;
-  const dkeep = options?.keepDirective;
-  const cnest = options.nested;
+  const ekeep = options.keepEmpty ?? false;
+  const dkeep = options.keepDirective ?? false;
+  const cnest = options.nested ?? false;
 
   // rm the next - count lines
   if (action?.type === ACT_MAP.rml) {
@@ -598,11 +609,9 @@ const applyDirective = (
   }
   let firstLine = lines[idx] ?? '';
   if (isNumber(firstLine)) { out.push(firstLine); return idx; }
-
   // regex/match helpers
-  // const re = createDirectiveRegex(options);
-  const rmcar = re.mcar;
-  const rmcdr = re.mcdr;
+  const reMcar = re.mcar;
+  const reMcdr = re.mcdr;
 
   // if no action or action condition is not met
   if (!action) {
@@ -694,34 +703,57 @@ const applyDirective = (
   // return if not rm/un comment as this is a fall-through case (should never happen)
   if (!isRmcomment && !isUncomment) { return idx; }
 
-  const nextLine = lines[jdx];
+  firstLine = lines[jdx] ?? '';
   // since un/rm comment doesn't implment count we can simply ingore empty lines
-  if (!nextLine || isNumber(nextLine) || !nextLine.trim().length) {
-    ekeep && out.push(nextLine ?? '');
+  if (!firstLine || isNumber(firstLine) || !firstLine.trim().length) {
+    ekeep && out.push(firstLine ?? '');
     return jdx;
   }
-  // unless explict false, adjust white space
-  const spaceAdjust = !ekeep && options.keepSpace !== true;
-  // rm/trim end space(s)
-  const spaceTrim = (val: string) => (spaceAdjust ? val.trimEnd() : val);
 
-  const imcar = rmcar ? nextLine.search(rmcar) : -1;
-  const scar = imcar === -1 ? nextLine.match(re.scar) : null;
+  // helper for opt: false=none; true=both; 1=single only; 2=multi only
+  const keepPad = (opt: boolean | 1 | 2, isSingle = true): 0 | 1 => (opt === true
+        || (opt === 1 && isSingle)
+        || (opt === 2 && !isSingle))
+    ? 1
+    : 0;
+
+  const { keepPadStart = true, keepPadEnd = 2, keepPadIn = 2, keepPadEmpty } = options;
+  type PadArg = [
+    pos: -1 | 1 | -2 | 2, // -1=single-start, 1=single-end, -2=muti-start, 2=multi-end
+    reg: RegExpMatchArray,
+    keepEmpty?: number, // for inline multi-line padding
+  ];
+  const addPad = (arg: PadArg[], rtn: string) => {
+    for (const [pos, reg, keepEmpty] of arg) {
+      const start = Math.abs(reg[0].length - reg[0].trimStart().length);
+      const end = Math.abs(reg[0].length - reg[0].trimEnd().length);
+      const single = Math.abs(pos) === 1;
+      const pend = pos > 0 && !keepPad(keepPadEnd, single)
+        ? 0 // effectivly trimEnd
+        : (((0 > pos ? start : end)
+            * keepPad(0 > pos ? keepPadStart : keepPadEnd, single)));
+      const total = ((0 > pos ? end : start) * keepPad(keepPadIn, single)) + pend;
+      const pad = total ? ' '.repeat(total) : '';
+      rtn = 0 > pos ? pad + rtn : rtn + pad;
+      // remove empty-line whitespace only
+      rtn = !keepEmpty && !keepPadEmpty && !rtn.trim().length ? '' : rtn;
+    }
+    return rtn;
+  };
+
+  const imcar = reMcar ? firstLine.search(reMcar) : -1;
+  const scar = imcar === -1 ? firstLine.match(re.scar) : null;
   // single-line comment - only if no mult-line comment e.g: /* // match multi */
   if (scar) {
     const iscar = scar.index as number;
-    const startOffset = scar[0].length;
     // captures whitespace within comment marker pattern; e.g: spaces in: \s*
-    const headOffset = startOffset - scar[0].trimStart().length;
-    const pre = nextLine.substring(0, iscar);
-
+    const pre = firstLine.substring(0, iscar);
     // single-line comment without end marker; e.g: // or #
     if (!re.scdr) {
       // un=comment
-      isUncomment && out.push(spaceTrim(
-        pre
-          + (spaceAdjust ? ' '.repeat(headOffset) : '') // separator; add marker space back
-          + nextLine.substring(iscar + startOffset), // content
+      isUncomment && out.push(pre + addPad(
+        [ [-1, scar] ],
+        firstLine.substring(iscar + scar[0].length), // content
       ));
       // rm=comment
       isRmcomment && (ekeep || pre.trim().length > 0)
@@ -730,17 +762,18 @@ const applyDirective = (
     }
 
     // single-line comment with an end marker; e.g: <!-- -->
-    const iscdr = nextLine.search(re.scdr);
-    if (iscdr > iscar) {
-      const endMatch = nextLine.substring(iscdr).match(re.scdr);
-      const post = nextLine.substring(
+    const scdr = firstLine.match(re.scdr);
+    const iscdr = scdr?.index ?? -1;
+    if (scdr && iscdr > iscar) {
+      const endMatch = firstLine.substring(iscdr).match(re.scdr);
+      const post = firstLine.substring(
         iscdr + (endMatch ? endMatch[0].length : 0), // comment end length
       );
       // un=comment
-      isUncomment && out.push(spaceTrim(pre
-        + (spaceAdjust ? ' '.repeat(headOffset) : '') // separator
-        + nextLine.substring(iscar + startOffset, iscdr) // content
-        + post));
+      isUncomment && out.push(pre + addPad(
+        [ [-1, scar, pre.trim().length], [1, scdr, post.trim().length] ],
+        firstLine.substring(iscar + scar[0].length, iscdr), // content
+      ) + post);
       // rm=comment
       isRmcomment && (ekeep || (pre + post).trim().length > 0) && out.push(pre + post);
       return jdx;
@@ -748,71 +781,58 @@ const applyDirective = (
   }
 
   // no mult regex
-  if (!rmcar || !rmcdr) { return idx; }
-
-  firstLine = lines[jdx] ?? '';
-  if (isNumber(firstLine)) { out.push(firstLine); return jdx; }
+  if (!reMcar || !reMcdr) { return idx; }
 
   // if not start match bail
-  const firstMatchIndex = firstLine.search(rmcar);
-  if (firstMatchIndex === -1) { out.push(firstLine); return jdx; }
+  if (imcar === -1) { out.push(firstLine); return jdx; }
 
-  // comment block identification
-  let totalLines = 0;
-  let headOffset = 0; // whitespace offset before the first opening marker
-  let endLineIndex = -1;
-  let endCharIndex = -1; // index in the end line, *after* the closing marker
+  // multi-comment block identification
+  let meLineIdx = -1;
+  let meIdx = -1; // index in the end line, after the closing marker
+  let meMatch: RegExpMatchArray | null = null;
+  let msMatchP: RegExpMatchArray | null = null;
 
-  const headMatch = cnest ? null : firstLine.substring(firstMatchIndex).match(rmcar)!;
-  headOffset = headMatch
-    ? headMatch[0].length - headMatch[0].trimStart().length
-    : 0;
-
-  let nestingLevel = 0;
+  let nlvl = 0;
   for (let j = jdx; j < lines.length; j++) {
-    const lineToScan = lines[j] ?? '';
-    if (isNumber(lineToScan)) { continue; }
-    // non-nested fast-pass -find the first opening marker and first closing marker after it
+    const jline = lines[j] ?? '';
+    if (isNumber(jline)) { continue; }
+    // non-nested fast-pass; find the first opening marker and first closing marker after it
     if (!cnest) {
+      msMatchP = msMatchP ?? firstLine.substring(imcar).match(reMcar)!;
       // on the first line, search after the head marker
-      const searchOffset = (j === jdx) ? firstMatchIndex + headMatch![0].length : 0;
-      const tailMatch = lineToScan.substring(searchOffset).match(rmcdr);
-      if (!tailMatch) { continue; }
+      const offset = (j === jdx) ? imcar + msMatchP![0].length : 0;
+      meMatch = jline.substring(offset).match(reMcdr);
+      if (!meMatch) { continue; }
       // found the first closing marker, so the block ends here
-      endLineIndex = j;
-      totalLines = j - (jdx - (ekeep && !dkeep ? 1 : 0));
-      endCharIndex = searchOffset + tailMatch.index! + tailMatch[0].length;
+      meLineIdx = j;
+      meIdx = offset + meMatch.index! + meMatch[0].length;
       break;
     }
 
     // counting and pairing opening/closing markers (e.g: /* ... /* ... */ ... */)
-    let scanFromIndex = (j === jdx) ? firstMatchIndex : 0;
-    while (scanFromIndex < lineToScan.length) {
-      const headMatch = lineToScan.substring(scanFromIndex).match(rmcar);
-      const tailMatch = lineToScan.substring(scanFromIndex).match(rmcdr);
-      const headIndex = headMatch ? headMatch.index! + scanFromIndex : -1;
-      const tailIndex = tailMatch ? tailMatch.index! + scanFromIndex : -1;
+    let fromIdx = (j === jdx) ? imcar : 0;
+    while (fromIdx < jline.length) {
+      const msMatch = jline.substring(fromIdx).match(reMcar);
+      const meMatchP = jline.substring(fromIdx).match(reMcdr);
+      const headIdx = msMatch ? msMatch.index! + fromIdx : -1;
+      const tailIdx = meMatchP ? meMatchP.index! + fromIdx : -1;
 
-      // prioritize the earliest marker found on the line.
-      if (headIndex !== -1 && (headIndex < tailIndex || tailIndex === -1)) {
-        if (nestingLevel === 0) {
-          // capture whitespace offset from the very first opening marker
-          headOffset = headMatch![0].length - headMatch![0].trimStart().length;
-        }
-        nestingLevel++;
-        scanFromIndex = headIndex + headMatch![0].length;
+      // prioritize the earliest marker found on the line
+      if (headIdx !== -1 && (headIdx < tailIdx || tailIdx === -1)) {
+        nlvl++;
+        fromIdx = headIdx + msMatch![0].length;
         continue; // continue scanning the same line after this head marker
       }
 
-      // if no tail marker, we're done with this line
-      if (tailIndex === -1) { break; }
-      nestingLevel--;
-      scanFromIndex = tailIndex + tailMatch![0].length;
-      if (nestingLevel === 0) {
+      // if no tail marker, we done with this line
+      if (tailIdx === -1) { break; }
+      nlvl--;
+      fromIdx = tailIdx + meMatchP![0].length;
+      if (nlvl === 0) {
         // we found the final closing marker that balances the first opening one
-        endLineIndex = j;
-        totalLines = j - (jdx - (ekeep && !dkeep ? 1 : 0));
-        endCharIndex = scanFromIndex;
+        meLineIdx = j;
+        meIdx = fromIdx;
+        meMatch = meMatchP;
         j = lines.length; // break outer loop immediately - faster loop
         break;
       }
@@ -820,81 +840,79 @@ const applyDirective = (
   }
 
   // if no closing marker was found, treat as unclosed and do nothing/ignore
-  if (endLineIndex === -1) { return lines.length - 1; }
+  if (meLineIdx === -1) { return lines.length - 1; }
+
+  // find the specific end match - if nested re-match
+  const msMatchF = msMatchP ?? firstLine.substring(imcar).match(reMcar);
+  // gotta bail if theres not start/end
+  if (!msMatchF || !meMatch) { return meLineIdx; }
 
   // if rm comment use the defined block boundaries
   if (action.type === ACT_MAP.rmc) {
-    const pre = firstLine.substring(0, firstMatchIndex);
-    const mid = ekeep && totalLines ? '\n'.repeat(totalLines) : '';
-    const post = ((lines[endLineIndex] ?? '') as string).substring(endCharIndex);
-    const all = pre + mid + post;
-    // ensure we dont add an extra line
-    if (!all.length) { return endLineIndex; }
-    for (const item of (pre + mid + post).split('\n')) { out.push(spaceTrim(item)); }
-    return endLineIndex;
+    const pre = firstLine.substring(0, imcar);
+    const post = ((lines[meLineIdx] ?? '') as string).substring(meIdx);
+    // single line block
+    if (jdx === meLineIdx) {
+      (pre.length || post.length || ekeep)
+        && out.push(pre
+        + addPad([ [-2, msMatchF, pre.length], [2, meMatch, post.length] ], '')
+        + post);
+      return meLineIdx;
+    }
+    // multi-line block
+    const mpre = pre + addPad([ [-2, msMatchF, pre.length] ], '');
+    (ekeep || mpre.trim().length > 0) && out.push(mpre);
+    // add empty lines for the middle part
+    const emptyLines = meLineIdx - jdx - (dkeep ? 1 : 0);
+    (ekeep && emptyLines > 0) && out.push(...Array(emptyLines).fill(''));
+    const mpost = addPad([ [2, meMatch, post.length] ], '') + post;
+    (ekeep || mpost.trim().length > 0) && out.push(mpost);
+    return meLineIdx;
   }
 
   // bail on any thing other than uncommnet
-  if (action?.type !== ACT_MAP.unc) { return endLineIndex; }
-
-  const stitchLine = (lastLine = '', prefix = '', startContentIndex: number | null = null) => {
-    if (startContentIndex === null) {
-      const headMatch = lastLine.substring(firstMatchIndex).match(rmcar)!;
-      startContentIndex = firstMatchIndex + headMatch[0].length;
-    }
-    if (!cnest) {
-      const content = lastLine.substring(startContentIndex);
-      // find and remove the end marker via relative index
-      const lastMatchInContent = content.match(rmcdr)!;
-      const finalContent = (spaceAdjust && !prefix.length && startContentIndex
-        ? ' '.repeat(headOffset)
-        : '')
-      + (content.substring(0, lastMatchInContent.index)
-      + (content.substring(lastMatchInContent.index! + lastMatchInContent[0].length)));
-      return spaceTrim(prefix + finalContent);
-    }
-    const beforeEnd = lastLine.substring(0, endCharIndex);
-    const beforeEndContent = beforeEnd.substring(
-      startContentIndex,
-      // tail finder & match
-      beforeEnd.match(new RegExp(
-        rmcdr.source.endsWith('$') ? rmcdr.source : rmcdr.source + '$',
-      ))!.index!,
-    );
-    return prefix + beforeEndContent + lastLine.substring(endCharIndex);
-  };
+  if (action?.type !== ACT_MAP.unc) { return meLineIdx; }
 
   // single line
-  if (jdx === endLineIndex) {
-    const line = (lines[jdx] ?? '') as string;
-    out.push(stitchLine(line, line.substring(0, firstMatchIndex)));
-    return endLineIndex;
+  if (jdx === meLineIdx) {
+    const pre = firstLine.substring(0, imcar);
+    const post = firstLine.substring(meIdx);
+    out.push(pre
+      + addPad([ [-2, msMatchF, pre.length], [2, meMatch, post.length] ],
+        firstLine.substring(
+          imcar + msMatchF[0].length,
+          meIdx - meMatch[0].length,
+        )) // content
+     + post);
+    return meLineIdx;
   }
 
   // multi-line uncomment
-  for (let j = jdx; j <= endLineIndex; j++) {
-    const lineToModify = (lines[j] ?? '') as string;
+  for (let j = jdx; j <= meLineIdx; j++) {
+    const jline = (lines[j] ?? '') as string;
     // first line
     if (j === jdx) {
-      const prefix = (spaceAdjust && !lineToModify.substring(0, firstMatchIndex)?.length
-        ? ' '.repeat(headOffset)
-        : spaceAdjust ? '' : ' '.repeat(headOffset))
-        + lineToModify.substring(0, firstMatchIndex);
-      out.push(
-        spaceTrim(prefix + lineToModify.substring(firstMatchIndex).replace(rmcar, '')),
-      );
+      const pre = jline.substring(0, imcar);
+      out.push(pre + addPad(
+        [ [-2, msMatchF, pre.length] ],
+        jline.substring(imcar + msMatchF[0].length),
+      ));  // pre + content
       continue;
     }
     // last line
-    if (j === endLineIndex) {
-      out.push(spaceTrim(stitchLine(lineToModify, '', 0)));
+    if (j === meLineIdx) {
+      const post = jline.substring(meIdx);
+      out.push(addPad(
+        [ [2, meMatch, post.length] ],
+        jline.substring(0, meIdx - meMatch[0].length),
+      ) + post); // content + post
       continue;
     }
     // middle line(s)
-    out.push(lineToModify);
+    out.push(jline);
   }
 
-  return endLineIndex;
+  return meLineIdx;
 };
 
 
@@ -989,8 +1007,8 @@ export const commentDirective = (
     lines = out.length ? out.slice(0) : tmpl.split(/\r?\n/);
 
     // loose preprocessing involves replacing any content comment directive (let a = 1; // ###[IF])
-    // with a placeholder and moving the actual directive below; while far from
-    // elegant, it allows for the same pipeline without conditional logic everywhere
+    // with a placeholder and moving the actual directive below; far from elegant,
+    // but it allows for the same pipeline without extra conditional logic
     lines = !loose || out.length
       ? lines
       : (lines as string[]).reduce((lout, line) => {
@@ -1110,3 +1128,4 @@ export const commentDirective = (
 };
 
 export default commentDirective;
+
