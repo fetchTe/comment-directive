@@ -8,10 +8,8 @@ env:
   LINK_COMMITS: 1
   # set to '0' to consider all tags (otherwise tags must start with 'v')
   SEMVER_ONLY : 1
-  # if/when no previous tag is found, like the first/inital tag
   # if '0' and no previous tag found, will simply use an empty string
   FALLBACK    : 1
-  FALLBACK_TAG: 'v0.0.0'
   # set to '1' to enable action cache (perf/saving is negligible, if at all)
   USE_CACHE   : 0
 
@@ -85,45 +83,51 @@ jobs:
         run: |
           #!/bin/sh
           git config --global --add safe.directory /github/workspace
-          # this suppress an error occurred when the repository is a complete one
-          git fetch --prune --unshallow || true
           NUK=$(printf '\033[0m')
           YEL=$(printf '\033[0;33m')
           CYN=$(printf '\033[0;36m')
           gtag=""
-          grange="0"
+          grng=""
+          # find the latest previous tag
           if [ "${SEMVER_ONLY}" = "0" ]; then
             gtag=$(git tag --sort=-v:refname --list "v*" | grep -v "^${CURRENT_TAG}\$" | head -n 1)
           else
             for ref in $(git for-each-ref --sort=-creatordate --format '%(refname)' refs/tags); do
               tag="${ref#refs/tags/}"
               [ "${tag}" = "${CURRENT_TAG}" ] && continue
-              echo "${tag}" | grep -Eq '^v?([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?(\+[0-9A-Za-z-]+)?$' && gtag="${tag}" && break
+              echo "${tag}" | grep -Eq '^v?([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?(\+[0-9A-Za-z-]+)?$' \
+                && gtag="${tag}" \
+                && break
             done
           fi
+          # if no previous tag is found and FALLBACK is enabled use full history
           if [ -z "${gtag}" ] && [ "${FALLBACK}" = "1" ]; then
-            gtag="${FALLBACK_TAG}"
             printf "%s[WARN]%s No previous tag found... using full history\n" "${YEL}" "${NUK}"
-            grange=""
-          fi
-          if [ -n "${gtag}" ]; then
+            grng=""
+          elif [ -n "${gtag}" ]; then
             printf "%s[INFO]%s Comparing: %s%s..HEAD%s\n" "${CYN}" "${NUK}" "${CYN}" "${gtag}" "${NUK}"
-            grange="${gtag}..HEAD"
+            grng="${gtag}..HEAD"
+          else
+            printf "%s[WARN]%s No previous tag found and FALLBACK=0... skipping release notes\n" "${YEL}" "${NUK}"
+            echo "" >"/tmp/release.md"
+            exit 0
           fi
-          if [ -n "${gtag}" ]; then
+          # generate the release notes header
+          if [ -n "${gtag}" ] || [ "${FALLBACK}" = "1" ]; then
             if [ "${LINK_COMMITS}" = "1" ]; then
               printf "## [\`%s\`](https://github.com/%s/tree/%s)\n\n" "${CURRENT_TAG}" "${GITHUB_REPOSITORY}" "${CURRENT_TAG}" >"/tmp/release.md"
             else
               printf "## \`%s\`\n\n" "${CURRENT_TAG}" >"/tmp/release.md"
             fi
           fi
-          if [ "${grange}" != "0" ]; then
+          # generate the release notes content
+          if [ -n "${grng}" ] || [ "${FALLBACK}" = "1" ]; then
             if [ "${LINK_COMMITS}" = "1" ]; then
-              git log --oneline "${grange}" | awk -v repo="${GITHUB_REPOSITORY}" '{print "* [\`" substr($1, 1, 7) "\`](https://github.com/" repo "/commit/" substr($1, 1, 7) ") " substr($0, 9)}' >>"/tmp/release.md"
+              git log --oneline "${grng}" | awk -v repo="${GITHUB_REPOSITORY}" '{print "* [`" substr($1, 1, 7) "`](https://github.com/" repo "/commit/" substr($1, 1, 7) ") " substr($0, 9)}' >>"/tmp/release.md"
             else
-              git log --oneline "${grange}" | sed 's/^/* /' >>"/tmp/release.md"
+              git log --oneline "${grng}" | sed 's/^/* /' >>"/tmp/release.md"
             fi
-            echo "${CYN}[DONE] out: /tmp/release.md${NUK}"
+            printf "%s[DONE]%s out: /tmp/release.md\n" "${CYN}" "${NUK}"
             printf "${CYN}%s%*s${NUK}\n" "[OUT]" 85 "" | tr " " "~"
             cat "/tmp/release.md"
             printf "${CYN}%s%*s${NUK}\n" "[OUT]" 85 "" | tr " " "~"
