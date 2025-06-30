@@ -235,6 +235,57 @@ describe('options', () => {
 });
 
 
+describe('noop', () => {
+  const NOOP_IN = `
+// ###[IF]bingo=7;no=op;no=op;
+log('winner winner');
+log('chicken dinner');`;
+
+  test('noop - noop', () => {
+    expect(commentDirective(NOOP_IN, { yingo: 0 }, {keepDirective: true}))
+      .toEqual(NOOP_IN);
+    expect(commentDirective(NOOP_IN, { bingo: 0 }, {keepDirective: true}))
+      .toEqual(NOOP_IN);
+    expect(commentDirective(NOOP_IN, { bingo: 7 }, {keepDirective: true}))
+      .toEqual(NOOP_IN);
+  });
+
+  const NOOP_COND_IN = `
+// ###[IF]bingo=7;no=op;rm=line;
+log('winner winner');
+log('chicken dinner');`;
+
+  const NOOP_COND_OUT_1 = `
+// ###[IF]bingo=7;no=op;rm=line;
+log('chicken dinner');`;
+
+  test('condition', () => {
+    expect(commentDirective(NOOP_COND_IN, { bingo: 1 }, {keepDirective: true}))
+      .toEqual(NOOP_COND_OUT_1);
+    expect(commentDirective(NOOP_COND_IN, { bingo: 7 }, {keepDirective: true}))
+      .toEqual(NOOP_COND_IN);
+  });
+
+
+  const NOOP_ELSE_IN = `
+// ###[IF]bingo=7;rm=line;no=op;
+log('winner winner');
+log('chicken dinner');`;
+
+  const NOOP_ELSE_OUT_7 = `
+// ###[IF]bingo=7;rm=line;no=op;
+log('chicken dinner');`;
+
+  test('else', () => {
+    expect(commentDirective(NOOP_ELSE_IN, { bingo: 7 }, {keepDirective: true}))
+      .toEqual(NOOP_ELSE_OUT_7);
+    expect(commentDirective(NOOP_ELSE_IN, { bingo: 0 }, {keepDirective: true}))
+      .toEqual(NOOP_ELSE_IN);
+  });
+
+});
+
+
 // -----------------------------------------------------------------------------
 // @id::fn
 // -----------------------------------------------------------------------------

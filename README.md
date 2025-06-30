@@ -6,7 +6,6 @@ A brutally effective text preprocessor that uses comments as conditional directi
 > But, as with anything [`RegExp`](https://en.wikipedia.org/wiki/Regular_expression), it's more like a well-oiled [ice sculpture](https://en.wikipedia.org/wiki/Ice_sculpture) chainsaw than a surgical blade
 
 
-
 ## QuickStart
 
 ```ts
@@ -136,9 +135,32 @@ const port = 3000;
 Directives are executed top-to-bottom and can be "[stacked](#stacked)" on top of one another.
 
 
+#### ▎`no=op`
+Also known as nada, nought, squat, zilch, or, if you prefer a more benign term, no operation:
+
+```ts
+/* @INPUT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+// ###[IF]bingo=7;no=op;rm=line;
+log('winner winner');
+log('chicken dinner');
+
+/* @IF bingo=7 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+log('winner winner');
+log('chicken dinner');
+
+/* @IF bingo=0 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+log('chicken dinner');
+
+/* @IF bingo=1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+log('chicken dinner');
+```
+> **NOTE**: in other words, a negated condition: if any value **but** X, do Y
+
+<br/>
+
+
 #### ▎`rm=<N>L`
 Removes the next `N` lines, such as `rm=3L` removes the next 3 lines:
-
 
 ```ts
 /* @INPUT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
@@ -871,7 +893,7 @@ Contributions, pull requests, and suggestions are appreciated. First, make sure 
   -------------------
    install               installs dependencies via bun
    update                updates dependencies
-   update_dry            list dependencies that would be updated via deps_update
+   update_dry            list dependencies that would be updated via update
   -------------------
    lint                  lints via tsc & eslint
    lint_eslint           lints via eslint
