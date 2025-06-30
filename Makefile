@@ -88,7 +88,7 @@ _BFMT = esm
 # bun positional
 _BPOS = build
 # bun ext file/format
-_BEXE = mjs
+_BEXE = js
 # bun output location
 _BOUT =
 # bun private/dynamic flags
@@ -215,9 +215,9 @@ _build_code_factory: # private code build .{js,cjs,mjs,d.ts}
 _bun_factory: # private bun factory
 	@$(MAKE) MSG="bun $(_BPOS) $(_BEXE) / $(_BFMT)" _init
 	@# print/debug full command
-	@[ "$(DEBUG)" != "1" ] && true || echo " $(BIN_BUN) $(_VFLG) $(_BPOS) $(_BBIN) $(BUN) $(_BFLG_SHR) $(_BFLG) $(_WFLG) $(_BAIL) --define ENV="\"$(ENV)\"" --define IS_DEBUG="$(DEBUG)" --define IS_DEV="$(IS_DEV)" --define IS_FORMAT="\"$(_BFMT)\"" --define IS_PROD="$(IS_PROD)" --define IS_TEST="$(IS_TEST)" --define IS_WATCH="$(WATCH)" $(_BOUT)"
+	@[ "$(DEBUG)" != "1" ] && true || echo " $(BIN_BUN) $(_VFLG) $(_BPOS) $(BUN) $(_BFLG_SHR) $(_BFLG) $(_WFLG) $(_BAIL) --define ENV="\"$(ENV)\"" --define IS_DEBUG="$(DEBUG)" --define IS_DEV="$(IS_DEV)" --define IS_FORMAT="\"$(_BFMT)\"" --define IS_PROD="$(IS_PROD)" --define IS_TEST="$(IS_TEST)" --define IS_WATCH="$(WATCH)" $(_BOUT)"
 	@# flag priority -> last takes the cake
-	@$(BIN_BUN) $(_VFLG) $(_BPOS) $(_BBIN) $(BUN) $(_BFLG_SHR) $(_BFLG) $(_WFLG) $(_BAIL) \
+	@$(BIN_BUN) $(_VFLG) $(_BPOS) $(BUN) $(_BFLG_SHR) $(_BFLG) $(_WFLG) $(_BAIL) \
 		--define ENV="\"$(ENV)\"" \
 		--define IS_DEBUG="$(DEBUG)" \
 		--define IS_DEV="$(IS_DEV)" \
@@ -249,7 +249,7 @@ update: ## updates dependencies
 	@$(MAKE) MSG="update" LEN="-1" _done
 
 .PHONY: update_dry
-update_dry: ## list dependencies that would be updated via deps_update
+update_dry: ## list dependencies that would be updated via 'make update'
 	@$(BIN_BUN) $(_VFLG) outdated
 
 
