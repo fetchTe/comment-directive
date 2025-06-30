@@ -5,6 +5,7 @@
 // maps short action codes to their full names
 const ACT_MAP = {
   fn: 'fn',
+  no: 'op',
   rml: 'rm_line',
   rmc: 'rm_comment',
   unc: 'un_comment',
@@ -19,7 +20,7 @@ const ACT_MAP = {
 
 // list of valid action prefixes for parsing
 // eslint-disable-next-line @stylistic/max-len
-const ACT_PREFIXS = ['rm=', 'un=', 'sed=', 'fn=', 'append=', 'prepend=', 'unshift=', 'push=', 'shift=', 'pop='] as const;
+const ACT_PREFIXS = ['no=', 'rm=', 'un=', 'sed=', 'fn=', 'append=', 'prepend=', 'unshift=', 'push=', 'shift=', 'pop='] as const;
 
 // sequence-based actions
 const ACT_SEQ_ARR = ['append', 'prepend', 'unshift', 'push', 'shift', 'pop'] as const;
@@ -108,6 +109,14 @@ export type ActionRemoveComment = { type: ActMap['rmc']; count: number; };
 
 export type ActionUnComment = { type: ActMap['unc']; count: number; };
 
+export type ActionNoop = {
+  type: ActMap['no'];
+  // @note -> count/stop don't do anything as of now, currently cogitating
+  count: number;
+  stop: null | string;
+  val: string;
+};
+
 export type ActionFunction = {
   type: ActMap['fn'];
   count: number;
@@ -158,7 +167,7 @@ export type ActionPop = {
 
 export type ActionSequence = ActionAppend | ActionPrepend | ActionShift | ActionPrepend | ActionPop;
 
-export type Actions = ActionRemoveLines | ActionRemoveComment | ActionUnComment
+export type Actions = ActionNoop | ActionRemoveLines | ActionRemoveComment | ActionUnComment
 | ActionSedReplace | ActionSequence | ActionFunction;
 
 
@@ -341,19 +350,39 @@ const createDirectiveRegex = (() => {
 
 /**
  * parses out the line count like '4L' from a param string
- * @param  {string} param
+ * @val  {string} val
  * @param  {number} [def=1] - default count
  * @return {count: number; param: string;}
  * @internal
  */
-const parseLineCount = (param: string, def = 1): {count: number; param: string;} => {
-  const lineMatch = param.match(/(\d+)L$/);
+const parseActionMeta = <S extends string | null = null>(val: string, def = 1, deli = null as S): {
+  count: number;
+  val: string;
+  stop: S extends string ? string : null;
+} => {
+  const lineMatch = val.match(/(\d+)L$/);
   let count = def;
   if (lineMatch?.[1]) {
     count = Number.parseInt(lineMatch[1]);
-    param = param.slice(0, -lineMatch[0].length);
+    val = val.slice(0, -lineMatch[0].length);
   }
-  return {count, param};
+
+
+  let stop: null | string = null;
+  // parse stop condition like '/@stop-condition'
+  if (deli) {
+    const stopMark = `${deli}@`;
+    const stopIdx = val.lastIndexOf(stopMark);
+    if (stopIdx !== -1) {
+      stop = val.slice(stopIdx + stopMark.length);
+      val = val.slice(0, stopIdx);
+    }
+    // remove end delimiter
+    const endIdx = val.endsWith(deli) ? val.lastIndexOf(deli) : -1;
+    val = endIdx === -1 ? val : val.slice(0, endIdx);
+  }
+
+  return {count, val, stop: stop as never};
 };
 
 
@@ -399,9 +428,18 @@ const parseAction = (() => {
       return null;
     }
 
+    // noop
+    if (act === 'no') {
+      const {val, count, stop} = parseActionMeta(param, 1, options.delimiter);
+      const result = { val, type: ACT_MAP.no, count, stop };
+      cache && cache.set(spec, result);
+      console.log(result);
+      return result;
+    }
+
     // remove X lines
     if (act === 'rm' && (param.startsWith('line') || (/^\d+L$/).test(param))) {
-      const result = { type: ACT_MAP.rml, count: parseLineCount(param).count };
+      const result = { type: ACT_MAP.rml, count: parseActionMeta(param).count };
       cache && cache.set(spec, result);
       return result;
     }
@@ -417,32 +455,15 @@ const parseAction = (() => {
         return null;
       }
       // @note -> count is passed, but not implemented, probs not worth effort/overhead
-      const result = { type: atype, count: parseLineCount(param).count };
+      const result = { type: atype, count: parseActionMeta(param).count };
       cache && cache.set(spec, result);
       return result;
     }
 
     // append/prepend/shift/pop
     if (isSeqActionType(act) || act === 'fn') {
-      let seq = param;
-      let stop = null;
-
-      const lcount = parseLineCount(seq);
-      const count = lcount.count;
-      seq = lcount.param;
-
-      // parse stop condition like '/@stop-condition'
-      const delimiter = options?.delimiter ?? '/';
-      const stopMarker = `${delimiter}@`;
-      const stopIndex = seq.lastIndexOf(stopMarker);
-      if (stopIndex !== -1) {
-        stop = seq.slice(stopIndex + stopMarker.length);
-        seq = seq.slice(0, stopIndex);
-      }
-      // remove end delimiter
-      const endDeliIndex = seq.endsWith(delimiter) ? seq.lastIndexOf(delimiter) : -1;
-      if (endDeliIndex !== -1) { seq = seq.slice(0, endDeliIndex); }
-      const val = seq;
+      const {val, count, stop} = parseActionMeta(param, 1, options.delimiter);
+      // console.log({val, count, stop, param, del: options.delimiter})
       if (!val && act !== 'pop' && act !== 'shift') {
         const err = `[commentDirective:parseAction] no ${act} 'value' found: ${param}`;
         if (options.throw) { throw new Error(err); }
@@ -513,28 +534,27 @@ const parseAction = (() => {
         return null;
       }
 
-      // parse meta string: flags, stop, count
-      let restOfMeta = meta ?? '';
-      let stop = null;
-      let flags = '';
-      const lcount = parseLineCount(restOfMeta, 0);
-      let count = lcount.count;
-      restOfMeta = lcount.param;
-
-      const stopIndex = restOfMeta.indexOf('@');
+      // eslint-disable-next-line prefer-const
+      let {val, count, stop} = parseActionMeta(meta ?? '', 0, options.delimiter);
+      let flags = val;
+      // re-parse out flags and stop
+      const stopIndex = val.indexOf('@');
       if (stopIndex !== -1) {
-        flags = restOfMeta.slice(0, stopIndex);
-        stop = restOfMeta.slice(stopIndex + 1);
+        flags = val.slice(0, stopIndex);
+        stop = val.slice(stopIndex + 1);
       } else {
-        flags = restOfMeta;
+        flags = val;
       }
 
       const flagChars = flags.split('');
-      // if not global and no count default to 1
-      count = !count && !flagChars.includes('g') ? 1 : count;
-
       const result = {
-        type: ACT_MAP.sed, pattern, replacement, flags: flagChars, count, stop,
+        type: ACT_MAP.sed,
+        pattern,
+        replacement,
+        flags: flagChars,
+        stop,
+        // if not global and no count default to 1
+        count: !count && !flagChars.includes('g') ? 1 : count,
       };
       cache && cache.set(spec, result);
       return result;
@@ -616,6 +636,17 @@ const applyDirective = (
   options: CommentOptionsR,
   re: ReDirective,
 ): number => {
+  let firstLine = lines[idx] ?? '';
+  if (isNumber(firstLine)) { out.push(firstLine); return idx; }
+  // if no action or action condition is not met
+  if (!action) {
+    // always drop the directive comment itself
+    if (re.dir.test(firstLine)) { return idx; }
+    out.push(firstLine);
+    return idx;
+  }
+
+  let jdx = idx + 1;
   const ekeep = options.keepEmpty ?? false;
   const dkeep = options.keepDirective ?? false;
   const cnest = options.nested ?? false;
@@ -625,20 +656,34 @@ const applyDirective = (
     ekeep && Array(action.count + (dkeep ? 0 : 1)).fill('').forEach(v => out.push(v));
     return idx + action.count;
   }
-  let firstLine = lines[idx] ?? '';
-  if (isNumber(firstLine)) { out.push(firstLine); return idx; }
-  // regex/match helpers
-  const reMcar = re.mcar;
-  const reMcdr = re.mcdr;
 
-  // if no action or action condition is not met
-  if (!action) {
-    // always drop the directive comment itself
-    if (re.dir.test(firstLine)) { return idx; }
-    out.push(firstLine);
-    return idx;
+  // custom fn or no-op
+  // @TODO -> decide if no=op should have the ablity to be apply on block/<N>L level;
+  //          e.g: if no=op/9L should apply to the next 9 lines invalidating other actions
+  if (action.type === ACT_MAP.fn || action.type === ACT_MAP.no) {
+    const {
+      count,
+      stop,
+      val,
+    } = action;
+    const reStop = stop ? new RegExp(toEscapedPattern(stop, options.escape)) : null;
+    // loop and replace till count or stop
+    let processedLines = 0;
+    const input: (string | number)[] = [];
+    const start = jdx;
+    while (jdx < lines.length && (processedLines < count || stop)) {
+      const currentLine = lines[jdx] ?? '';
+      input.push(lines[jdx] ?? '');
+      jdx++;
+      processedLines++;
+      if (reStop && isString(currentLine) && currentLine.match(reStop)) { break; }
+    }
+    const output = action.type === ACT_MAP.no || !options?.fn
+      ? input
+      : options?.fn(input, val, start);
+    output.forEach(val => out.push(val));
+    return jdx - 1;
   }
-  let jdx = idx + 1;
 
   // sed'in -> line
   if (action.type === ACT_MAP.sed) {
@@ -667,29 +712,6 @@ const applyDirective = (
     return jdx - 1;
   }
 
-  // custom fn
-  if (action.type === ACT_MAP.fn) {
-    const {
-      count,
-      stop,
-      val,
-    } = action;
-    const reStop = stop ? new RegExp(toEscapedPattern(stop, options.escape)) : null;
-    // loop and replace till count or stop
-    let processedLines = 0;
-    const input: (string | number)[] = [];
-    const start = jdx;
-    while (jdx < lines.length && (processedLines < count || stop)) {
-      const currentLine = lines[jdx] ?? '';
-      input.push(lines[jdx] ?? '');
-      jdx++;
-      processedLines++;
-      if (reStop && isString(currentLine) && currentLine.match(reStop)) { break; }
-    }
-    const output = options?.fn ? options?.fn(input, val, start) : input;
-    output.forEach(val => out.push(val));
-    return jdx - 1;
-  }
 
   // append/prepend/shift/pop
   if (isSeqAction(action)) {
@@ -777,6 +799,9 @@ const applyDirective = (
     return rtn;
   };
 
+  // regex/match helpers
+  const reMcar = re.mcar;
+  const reMcdr = re.mcdr;
   const imcar = reMcar ? firstLine.search(reMcar) : -1;
   const scar = imcar === -1 ? firstLine.match(re.scar) : null;
   // single-line comment - only if no mult-line comment e.g: /* // match multi */
