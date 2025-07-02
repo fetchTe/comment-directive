@@ -103,11 +103,16 @@ export type ActMap = typeof ACT_MAP;
 
 export type ActsSeq = typeof ACT_SEQ_ARR[number];
 
-export type ActionRemoveLines = { type: ActMap['rml']; count: number; };
-
 export type ActionRemoveComment = { type: ActMap['rmc']; count: number; };
 
 export type ActionUnComment = { type: ActMap['unc']; count: number; };
+
+export type ActionRemoveLines = {
+  type: ActMap['rml'];
+  count: number;
+  stop: null | string;
+  val: string;
+};
 
 export type ActionNoop = {
   type: ActMap['no'];
@@ -438,8 +443,10 @@ const parseAction = (() => {
     }
 
     // remove X lines
-    if (act === 'rm' && (param.startsWith('line') || (/^\d+L$/).test(param))) {
-      const result = { type: ACT_MAP.rml, count: parseActionMeta(param).count };
+    if (act === 'rm' && ((/^(line|@)/).test(param) || (/^\d+L$/).test(param))) {
+      const {val, count} = parseActionMeta(param);
+      const stop = val.startsWith('@') ? val.replace('@', '') : null;
+      const result = { type: ACT_MAP.rml, count, val, stop };
       cache && cache.set(spec, result);
       return result;
     }
@@ -653,8 +660,22 @@ const applyDirective = (
 
   // rm the next - count lines
   if (action?.type === ACT_MAP.rml) {
-    ekeep && Array(action.count + (dkeep ? 0 : 1)).fill('').forEach(v => out.push(v));
-    return idx + action.count;
+    const {
+      count,
+      stop,
+    } = action;
+    ekeep && Array(count + (dkeep ? 0 : 1)).fill('').forEach(v => out.push(v));
+    if (!stop) { return idx + count; }
+    const reStop = new RegExp(toEscapedPattern(stop, options.escape));
+    let jdx = idx;
+    let processedLines = 0;
+    while (jdx < lines.length && (processedLines < count || stop)) {
+      jdx++;
+      processedLines++;
+      const currentLine = lines[jdx] ?? '';
+      if (isString(currentLine) && currentLine.match(reStop)) { break; }
+    }
+    return jdx - (dkeep ? 1 : 0);
   }
 
   // custom fn or no-op

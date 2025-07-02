@@ -960,6 +960,27 @@ describe('remove lines', () => {
   });
 
 
+  test('rm until stop', () => {
+    const input = `
+// ###[IF]test=0;rm=@//STOP_HERE;
+debug('a lemon');
+debug('is a lemon');
+//STOP_HERE
+warn('as an apple is an apple');`;
+
+    // we keep if keepDirective to avoid a disaster
+    const output = `
+// ###[IF]test=0;rm=@//STOP_HERE;
+//STOP_HERE
+warn('as an apple is an apple');`;
+
+    expect(commentDirective(input, { test: 1 }, {keepDirective: true})).toEqual(input);
+    expect(commentDirective(input, { test: 0 }, {keepDirective: true})).toEqual(output);
+    expect(commentDirective(output, { test: 1 }, {keepDirective: true})).toEqual(output);
+    expect(commentDirective(output, { test: 0 }, {keepDirective: true})).toEqual(output);
+  });
+
+
   test('rm single comments at end of line - loose', () => {
     const input = `
 console.log('willy'); // ###[IF]test=0;rm=comment;
