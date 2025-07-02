@@ -159,26 +159,39 @@ log('chicken dinner');
 <br/>
 
 
-#### ▎`rm=<N>L`
-Removes the next `N` lines, such as `rm=3L` removes the next 3 lines:
+#### ▎`rm=[<N>L][@<stop>]`
+Removes the next `N` lines, or up to `@<stop>`, such as `rm=3L` removes the next 3 lines:
 
 ```ts
 /* @INPUT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-// ###[IF]env=yaffle;rm=2L;
+// ###[IF]env=apple;rm=2L;
 debug('removes the');
 debug('de-bug(s)');
 warn('but not this warn');
+// ###[IF]env=apple;rm=@//STOP_HERE;
+debug('a lemon');
+debug('is a lemon');
+//STOP_HERE
+warn('as an apple is an apple');
 
 
-/* @IF env=yaffle ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+/* @IF env=apple ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 warn('but not this warn');
+warn('as an apple is an apple');
 
 
-/* @IF env=dazzle ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+/* @IF env=lemon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 debug('removes the');
 debug('de-bug(s)');
 warn('but not this warn');
+debug('a lemon');
+debug('is a lemon');
+//STOP_HERE
+warn('as an apple is an apple');
 ```
+> **NOTE**: the `@<stop>` marker is removed if matched and `keepDirective` is `false`; otherwise, it is kept
+
+
 <br/>
 
 

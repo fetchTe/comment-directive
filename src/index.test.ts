@@ -702,6 +702,40 @@ let dont = "work";
       .toEqual(RM_DONT_COMMENTED_OUT_DIRECTIVES_INPUT);
   });
 
+
+  test('rm until stop', () => {
+    const input = `
+// ###[IF]test=0;rm=@//STOP_HERE;
+debug('a lemon');
+debug('is a lemon');
+//STOP_HERE
+warn('as an apple is an apple');`;
+
+    const output_noop = `
+debug('a lemon');
+debug('is a lemon');
+//STOP_HERE
+warn('as an apple is an apple');`;
+
+    const output = `
+warn('as an apple is an apple');`;
+
+    const input_noop = `
+// ###[IF]test=0;rm=@//STOP_HERE;
+//STOP_HERE
+warn('as an apple is an apple');`;
+
+    const input_noop_output = `
+//STOP_HERE
+warn('as an apple is an apple');`;
+
+    expect(commentDirective(input, { test: 1 })).toEqual(output_noop);
+    expect(commentDirective(input, { test: 0 })).toEqual(output);
+    expect(commentDirective(input_noop, { test: 1 })).toEqual(input_noop_output);
+    expect(commentDirective(input_noop, { test: 0 })).toEqual(output);
+  });
+
+
   test('rm single comments at end of line - loose', () => {
     const RM_SINGLE_END_OF_LINE_INPUT = `
 console.log('willy'); // ###[IF]test=0;rm=comment;

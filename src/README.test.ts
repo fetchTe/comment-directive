@@ -124,6 +124,38 @@ console.warn('but not this warn');`.trim();
     });
   });
 
+  describe('rm=<N>L - ver.2', () => {
+    const RM_STOP_INPUT = `
+// ###[IF]env=apple;rm=2L;
+debug('removes the');
+debug('de-bug(s)');
+warn('but not this warn');
+// ###[IF]env=apple;rm=@//STOP_HERE;
+debug('a lemon');
+debug('is a lemon');
+//STOP_HERE
+warn('as an apple is an apple');`;
+
+    const RM_STOP_EXPECTED = `
+warn('but not this warn');
+warn('as an apple is an apple');`;
+    const RM_STOP_EXPECTED_NOT = `
+debug('removes the');
+debug('de-bug(s)');
+warn('but not this warn');
+debug('a lemon');
+debug('is a lemon');
+//STOP_HERE
+warn('as an apple is an apple');`;
+
+    test('removes next N lines with stop', () => {
+      expect(commentDirective(RM_STOP_INPUT, { env: 'apple' }))
+        .toEqual(RM_STOP_EXPECTED);
+      expect(commentDirective(RM_STOP_INPUT, { env: 'yapple' }))
+        .toEqual(RM_STOP_EXPECTED_NOT);
+    });
+  });
+
   describe('(rm|un)=comment', () => {
     const RM_UN_COMMENT_INPUT = `
 // ###[IF]prod=1;rm=comment;un=comment;
