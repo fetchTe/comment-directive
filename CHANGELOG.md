@@ -1,5 +1,13 @@
 # `CHANGELOG.md`
 
+## [`v1.2.0`](https://github.com/fetchTe/comment-directive/releases/tag/v1.2.0) `2025-07-02`
+
+### added
+
++ [`66cab36`](https://github.com/fetchTe/comment-directive/commit/66cab36) `2025-07-02` `rm` `@<stop>` marker logic
+
+
+
 ## [`v1.1.0`](https://github.com/fetchTe/comment-directive/releases/tag/v1.1.0) `2025-06-30`
 
 ### added
