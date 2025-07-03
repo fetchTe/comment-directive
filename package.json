@@ -1,6 +1,6 @@
 {
   "name": "comment-directive",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A text preprocessor that uses comments as conditional directives",
   "keywords": [ "comment", "directive", "conditional", "text", "preprocessor", "isomorphic" ],
   "homepage": "https://github.com/fetchTe/comment-directive",
