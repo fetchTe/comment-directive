@@ -1,5 +1,12 @@
 # `CHANGELOG.md`
 
+## [`v1.2.1`](https://github.com/fetchTe/comment-directive/releases/tag/v1.2.1) `2025-07-03`
+
+### fix
+
+- [`bb7f6a8`](https://github.com/fetchTe/comment-directive/commit/bb7f6a8) `2025-07-03` remove arrant/forgotten `console.log`
+
+
 ## [`v1.2.0`](https://github.com/fetchTe/comment-directive/releases/tag/v1.2.0) `2025-07-02`
 
 ### added
