@@ -438,7 +438,6 @@ const parseAction = (() => {
       const {val, count, stop} = parseActionMeta(param, 1, options.delimiter);
       const result = { val, type: ACT_MAP.no, count, stop };
       cache && cache.set(spec, result);
-      console.log(result);
       return result;
     }
 
@@ -470,7 +469,6 @@ const parseAction = (() => {
     // append/prepend/shift/pop
     if (isSeqActionType(act) || act === 'fn') {
       const {val, count, stop} = parseActionMeta(param, 1, options.delimiter);
-      // console.log({val, count, stop, param, del: options.delimiter})
       if (!val && act !== 'pop' && act !== 'shift') {
         const err = `[commentDirective:parseAction] no ${act} 'value' found: ${param}`;
         if (options.throw) { throw new Error(err); }
