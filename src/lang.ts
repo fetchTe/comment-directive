@@ -1,24 +1,28 @@
-import {
-  type CommentOptions,
-} from './index.ts';
-export type CmtTupleP = [start: RegExp, end: null];
-export type CmtTupleF = [start: RegExp, end: RegExp];
+export type CommentRegexN = [start: null, end: null];
+export type CommentRegexP = [start: RegExp, end: null];
+export type CommentRegexF = [start: RegExp, end: RegExp];
+export type CommentRegexSingle = CommentRegexP | CommentRegexF;
+export type CommentRegexMulti = CommentRegexP | CommentRegexF;
+export type CommentRegexOption = {
+  single: CommentRegexP | CommentRegexF;
+  multi: CommentRegexN | CommentRegexF;
+};
 
 // single
-export const cLikeSingle: CmtTupleP = [/\s*\/\/\s*/, null];
-export const hashLikeSingle: CmtTupleP = [/\s*#\s*/, null];
-export const erlangSingle: CmtTupleP = [/\s*%\s*/, null];
-export const sqlSingle: CmtTupleP = [/\s*--\s+/, null];
-export const lispSingle: CmtTupleP = [/\s*;\s*/, null];
+export const cLikeSingle: CommentRegexP = [/\s*\/\/\s*/, null];
+export const hashLikeSingle: CommentRegexP = [/\s*#\s*/, null];
+export const erlangSingle: CommentRegexP = [/\s*%\s*/, null];
+export const sqlSingle: CommentRegexP = [/\s*--\s+/, null];
+export const lispSingle: CommentRegexP = [/\s*;\s*/, null];
 // multi
-export const parensMulti: CmtTupleF = [/\s*\(\*/, /\*\)\s*/];
-export const cLikeMulti: CmtTupleF = [/\s*\/\*/, /\*\/\s*/];
-export const htmlMulti: CmtTupleF = [/\s*<!--/, /-->\s*/];
-export const jsxMulti: CmtTupleF = [/\s*\{\/\*/, /\*\/\}\s*/];
-export const lispMulti: CmtTupleF = [/\s*#\|/, /\|#\s*/];
+export const parensMulti: CommentRegexF = [/\s*\(\*/, /\*\)\s*/];
+export const cLikeMulti: CommentRegexF = [/\s*\/\*/, /\*\/\s*/];
+export const htmlMulti: CommentRegexF = [/\s*<!--/, /-->\s*/];
+export const jsxMulti: CommentRegexF = [/\s*\{\/\*/, /\*\/\}\s*/];
+export const lispMulti: CommentRegexF = [/\s*#\|/, /\|#\s*/];
 
 // c-like
-export const cLike: CommentOptions = {
+export const cLike: CommentRegexOption = {
   single: cLikeSingle,
   // eating the space before the comment makes it easier to work with inline-comments
   multi: cLikeMulti,
@@ -34,7 +38,7 @@ export const groovy = cLike;
 export const scala = cLike;
 
 // c-like but with no single-line comment syntax
-export const css: CommentOptions = {
+export const css: CommentRegexOption = {
   single: cLikeMulti,
   multi: cLikeMulti,
 };
@@ -45,7 +49,7 @@ export const css: CommentOptions = {
 # single line comment
 # (no standard multi-line syntax for most hash-like languages)
 ***************************************************************************** */
-export const hashLike: CommentOptions = {
+export const hashLike: CommentRegexOption = {
   single: hashLikeSingle,
   multi: [null, null],
 };
@@ -55,7 +59,7 @@ export const make = hashLike;
 export const yaml = hashLike;
 export const toml = hashLike;
 export const r = hashLike;
-export const bash: CommentOptions = {
+export const bash: CommentRegexOption = {
   single: hashLikeSingle,
   // heredocs are way too complex for a simple regex - but yolo
   multi: [/<<'EOF'/, /^EOF$/],
@@ -70,7 +74,7 @@ multi-line string/docstring
 (acts as multi-line comment)
 """
 ***************************************************************************** */
-export const python: CommentOptions = {
+export const python: CommentRegexOption = {
   single: hashLikeSingle,
   // explicit anchor to line start as trip quotes are not true multi-line comments
   multi: [/^\s*('''|""")/, /('''|""")/],
@@ -85,7 +89,7 @@ multi-line comment block
 must start at beginning of line
 =end
 ***************************************************************************** */
-export const ruby: CommentOptions = {
+export const ruby: CommentRegexOption = {
   single: hashLikeSingle,
   // =begin and =end must be at the start of the line with no leading space
   multi: [/^=begin\b/, /^=end\b/],
@@ -100,7 +104,7 @@ multi-line comment
 can span multiple lines
 -->
 ***************************************************************************** */
-export const html: CommentOptions = {
+export const html: CommentRegexOption = {
   single: htmlMulti,
   multi: htmlMulti,
 };
@@ -109,7 +113,7 @@ export const html: CommentOptions = {
 // jsx - a field of landmines - use with extra care or not at all
 // @example
 //  {/* single+multi line JSX comment */}
-export const jsx: CommentOptions = {
+export const jsx: CommentRegexOption = {
   single: jsxMulti,
   multi: jsxMulti,
 };
@@ -120,7 +124,7 @@ export const jsx: CommentOptions = {
 -- single line comment
 *c-like multi-line comment style
 ***************************************************************************** */
-export const sql: CommentOptions = {
+export const sql: CommentRegexOption = {
   single: sqlSingle,
   multi: cLikeMulti,
 };
@@ -134,7 +138,7 @@ multi-line comment
 can be nested {- like this -}
 -}
 ***************************************************************************** */
-export const haskell: CommentOptions = {
+export const haskell: CommentRegexOption = {
   single: sqlSingle,
   multi: [/\s*\{-/, /-\}\s*/],
 };
@@ -148,7 +152,7 @@ multi-line comment
 block style
 #>
 ***************************************************************************** */
-export const powershell: CommentOptions = {
+export const powershell: CommentRegexOption = {
   single: hashLikeSingle,
   // multi-line (block) comments use <# ... #>
   multi: [/\s*<#/, /#>\s*/],
@@ -159,7 +163,7 @@ export const powershell: CommentOptions = {
 /* ******************************************************************** @example
 ; single line comment
 ***************************************************************************** */
-export const ini: CommentOptions = {
+export const ini: CommentRegexOption = {
   // can also use '#' for comments?
   single: lispSingle,
   multi: [null, null],
@@ -171,7 +175,7 @@ export const ini: CommentOptions = {
 REM single line comment
 ::  single line comment (un-offical)
 ***************************************************************************** */
-export const bat: CommentOptions = {
+export const bat: CommentRegexOption = {
   // REM (with a space) or :: for comments
   single: [/^\s*(?:REM\s|::)/i, null],
   multi: [null, null],
@@ -182,7 +186,7 @@ export const bat: CommentOptions = {
 /* ******************************************************************** @example
 % single line comment
 ***************************************************************************** */
-export const erlang: CommentOptions = {
+export const erlang: CommentRegexOption = {
   single: erlangSingle,
   multi: [null, null],
 };
@@ -196,7 +200,7 @@ multi-line comment
 using hash-pipe syntax
 |#
 ***************************************************************************** */
-export const lisp: CommentOptions = {
+export const lisp: CommentRegexOption = {
   single: lispSingle,
   multi: lispMulti,
 };
@@ -211,7 +215,7 @@ multi-line comment
 using ML-style syntax
 *)
 ***************************************************************************** */
-export const fsharp: CommentOptions = {
+export const fsharp: CommentRegexOption = {
   single: cLikeSingle,
   multi: parensMulti,
 };
@@ -225,7 +229,7 @@ multi-line comment
 using hash-pipe syntax
 |#
 ***************************************************************************** */
-export const nim: CommentOptions = {
+export const nim: CommentRegexOption = {
   single: hashLikeSingle,
   multi: lispMulti,
 };
@@ -234,7 +238,7 @@ export const nim: CommentOptions = {
 /* ******************************************************************** @example
 // single line comment
 ***************************************************************************** */
-export const zig: CommentOptions = {
+export const zig: CommentRegexOption = {
   single: cLikeSingle,
   multi: [null, null],
 };
@@ -248,7 +252,7 @@ multi-line comment
 using ML-style syntax
 *)
 ***************************************************************************** */
-export const ocaml: CommentOptions = {
+export const ocaml: CommentRegexOption = {
   single: parensMulti,
   multi: parensMulti,
 };
