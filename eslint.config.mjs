@@ -1,6 +1,8 @@
 /**                                                                       @about
 @docs: https://eslint.org
 @desc: eslint v9 config with reasonable base, typescript, and stylistic defaults
+@note: there are a few of worthwhile ESLint plugins, but any good baker knows that
+       just like overmixing, overlinting can lead to tough, dense, and dry buns
 ***                                                                           */
 import esLint from '@eslint/js';
 import pluginStylistic from '@stylistic/eslint-plugin';
@@ -38,7 +40,7 @@ const GLOB_TS = (TSC.config.include || []).concat([
 
 // -----------------------------------------------------------------------------
 // Configure Language Options
-// @docs: https://eslint.org/docs/v9.x/use/configure/language-options#
+// @docs: https://eslint.org/docs/latest/use/configure/language-options#
 // -----------------------------------------------------------------------------
 const LANGUAGE_OPTIONS = {
   ecmaVersion: 2023,
@@ -48,7 +50,7 @@ const LANGUAGE_OPTIONS = {
 
 // -----------------------------------------------------------------------------
 // "recommended" configs (not all plugins export a recommended)
-// @docs: https://eslint.org/docs/v9.x/extend/plugins#configs-in-plugins
+// @docs: https://eslint.org/docs/latest/extend/plugins#configs-in-plugins
 // -----------------------------------------------------------------------------
 const RECOMMENDED_CONFIGS = [
   esLint.configs.recommended,
@@ -57,6 +59,8 @@ const RECOMMENDED_CONFIGS = [
     ? (CHECK_STRICT ? 'strictTypeChecked' : 'recommendedTypeChecked')
     : (CHECK_STRICT ? 'strict' : 'recommended')],
 ];
+
+
 
 // -----------------------------------------------------------------------------
 // main confing
@@ -95,11 +99,12 @@ const TYPESCRIPT_CONFIG = {
   rules: {
     // -------------------------------------------------------------------------
     // default
-    // @docs: eslint.org/docs/v9.x/rules
+    // @docs: eslint.org/docs/latest/rules
     // -------------------------------------------------------------------------
     'no-duplicate-imports': 'off',
     'no-unneeded-ternary': 'warn',
     'linebreak-style': ['warn', 'unix'],
+
 
     // -------------------------------------------------------------------------
     // typescript-eslint
@@ -156,7 +161,7 @@ const TYPESCRIPT_CONFIG = {
     '@stylistic/no-floating-decimal': ['error'],
     '@stylistic/no-mixed-operators': ['error'],
     '@stylistic/no-mixed-spaces-and-tabs': ['error', 'smart-tabs'],
-    '@stylistic/no-multi-spaces': ['warn', {ignoreEOLComments: true, exceptions: {VariableDeclarator: true, ImportDeclaration: true}}],
+    '@stylistic/no-multi-spaces': ['warn', {exceptions: {VariableDeclarator: true, ImportDeclaration: true}}],
     '@stylistic/no-multiple-empty-lines': ['warn', { max: 2, maxEOF: 2, maxBOF: 2 }],
     '@stylistic/no-tabs': ['error'],
     '@stylistic/no-trailing-spaces': ['warn', { ignoreComments: true }],
@@ -179,7 +184,6 @@ const TYPESCRIPT_CONFIG = {
     '@stylistic/wrap-iife': ['error', 'any'],
     '@stylistic/wrap-regex': 'warn',
     '@stylistic/yield-star-spacing': ['warn', {before: false, after: true}],
-    // '@stylistic/space-in-parens': ['warn',"never", { "exceptions": ["()"] } ],
     // https://eslint.style/rules/default/padding-line-between-statements
     '@stylistic/padding-line-between-statements': [
       'warn',
@@ -199,7 +203,6 @@ const TYPESCRIPT_CONFIG = {
     'indent': 'off',
     '@stylistic/indent': ['warn', 2, {
       VariableDeclarator: 'first',
-      offsetTernaryExpressions: true,
       ArrayExpression: 1,
       ObjectExpression: 1,
       ImportDeclaration: 1,
@@ -208,7 +211,7 @@ const TYPESCRIPT_CONFIG = {
     }],
 
     'quotes': 'off',
-    '@stylistic/quotes': ['warn', 'single', { allowTemplateLiterals: true }],
+    '@stylistic/quotes': ['warn', 'single', { "avoidEscape": true, allowTemplateLiterals: "avoidEscape" }],
     '@stylistic/quote-props': ['warn', 'consistent-as-needed'],
   },
 };
