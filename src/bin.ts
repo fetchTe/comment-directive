@@ -12,6 +12,7 @@ import {
   getArgvOptionTuple,
   prettyPrintJson,
   getArgv,
+  getArgvOption,
   getBooly,
   getArgvPositional,
 } from './bin.utils.ts';
@@ -48,6 +49,7 @@ type Options = {
   version: boolean;
   env: boolean;
   overwrite: boolean;
+  append: string | null;
   input: string | null;
   output: string | null;
 };
@@ -129,7 +131,7 @@ const ensureDirSync = (filePath: string, verbose = false) => {
 
 const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
   try {
-    const {input, overwrite, dry, verbose} = ctx;
+    const {append, input, overwrite, dry, verbose} = ctx;
     const output = ctx.output ? ctx.output : (overwrite ? input : null);
     let content: string | null = null;
     if (IS_PIPED) {
@@ -182,7 +184,7 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
     }
 
     // process the content with comment directive
-    const result = commentDirective(content, directives, options);
+    const result = (append ? append : '') + commentDirective(content, directives, options);
 
     if (dry) {
       console.log(`[DRY RUN] write to: ${output}`);
@@ -233,6 +235,7 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
 
 
 const parseArgs = () => {
+  // console.log(getArgvOption(['append', 'a']))
   const ctx: Options = {
     help: !!hasArgvFlags(['help', 'h']),
     verbose: !!hasArgvFlags(['verbose', 'v']),
@@ -240,8 +243,9 @@ const parseArgs = () => {
     version: !!hasArgvFlags('version'),
     env: !!hasArgvFlags('env'),
     overwrite: !!hasArgvFlags('overwrite'),
-    input: null,
-    output: null,
+    input: getArgvOption(['input', 'i']),
+    output: getArgvOption(['output', 'o']),
+    append: getArgvOption(['append', 'a']),
   };
   istruc.ctx = ctx;
 
@@ -264,6 +268,7 @@ const parseArgs = () => {
   -i, --input   <file>  Specify the input; overrides the positional argument;
                         Reads from stdin (piped) if no input positional/option defined
   -o, --output  <file>  Specify the output; defaults to stdout
+  -a, --append   <str>  Append string atop output to indicate it's auto-generated
   -l, --lang     <ext>  Set language syntax for comments (e.g: 'js', 'py', 'html')
       --overwrite       Overwrite input if: no output or the same (DANGER_ZONE)
 
@@ -297,7 +302,7 @@ const parseArgs = () => {
   let target: string | null = null;
   let optionTuples = getArgvOptionTuple(argv);
 
-  if (!IS_PIPED && !optionTuples.find(([key]) => key === 'i' || key === 'input')) {
+  if (!IS_PIPED && !ctx.input) {
     // attempt to get input positional
     const pos = getArgvPositional(ctxKeys.concat(optKeys), argv);
     target = pos?.pop() ?? null;
@@ -322,8 +327,6 @@ const parseArgs = () => {
   }
 
   for (const [key, val] of optionTuples) {
-    if (key === 'input' || key === 'i') { istruc.ctx.input = val as string; continue; }
-    if (key === 'output' || key === 'o') { istruc.ctx.output = val as string; continue; }
     if (key === 'lang' || key === 'l') {
       const lang = extensions[val as 'js'] as CommentRegexOption;
       if (!lang) {
