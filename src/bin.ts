@@ -7,14 +7,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {getMeta} from './_macro_' with { type: 'macro'};
 import {
-  ARGV,
-  hasArgvFlags,
-  getArgvOptionTuple,
   prettyPrintJson,
-  getArgv,
-  getArgvOption,
-  getBooly,
-  getArgvPositional,
+  toEntries,
+  toKeys,
 } from './bin.utils.ts';
 import {
   DEFAULT_OPTIONS,
@@ -38,6 +33,7 @@ import * as std from 'qjs:std';
 // ###[IF]node=1;rm=3L;
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { cliReapLoose } from 'cli-reap';
 
 type CommentDirectives = Record<string, boolean | number | string>;
 
@@ -68,22 +64,24 @@ const IS_PIPED = !os.isatty(std.in.fileno());
 // ###[IF]node=1;rm=1L;
 const IS_PIPED = !process.stdin.isTTY;
 
-const CMT_OPTIONS_BOOL = [
-  'escape',
-  'loose',
-  'nested',
-  'disableCache',
-  'throw',
-  'keepDirective',
-  'keepEmpty',
-] as const;
+// comment-directive options that are flags
+const CLI_FLAGS = {
+  escape: DEFAULT_OPTIONS.escape,
+  loose: DEFAULT_OPTIONS.loose,
+  nested: DEFAULT_OPTIONS.nested,
+  disableCache: DEFAULT_OPTIONS.disableCache,
+  throw: DEFAULT_OPTIONS.throw,
+  keepDirective: DEFAULT_OPTIONS.keepDirective,
+  keepEmpty: DEFAULT_OPTIONS.keepEmpty,
+} as const;
 
-const CMT_OPTIONS_PRIM = [
-  'keepPadStart',
-  'keepPadIn',
-  'keepPadEnd',
-  'keepPadEmpty',
-] as const;
+// comment-directive options that are primitaves (not flags)
+const CLI_OPTS = {
+  keepPadStart: DEFAULT_OPTIONS.keepPadStart,
+  keepPadIn: DEFAULT_OPTIONS.keepPadIn,
+  keepPadEnd: DEFAULT_OPTIONS.keepPadEnd,
+  keepPadEmpty: DEFAULT_OPTIONS.keepPadEmpty,
+} as const;
 
 const istruc: Struc  = {
   options: {...DEFAULT_OPTIONS},
@@ -235,22 +233,23 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
 
 
 const parseArgs = () => {
-  // console.log(getArgvOption(['append', 'a']))
+  const reap = cliReapLoose();
+
   const ctx: Options = {
-    help: !!hasArgvFlags(['help', 'h']),
-    verbose: !!hasArgvFlags(['verbose', 'v']),
-    dry: !!hasArgvFlags(['dry', 'n']),
-    version: !!hasArgvFlags('version'),
-    env: !!hasArgvFlags('env'),
-    overwrite: !!hasArgvFlags('overwrite'),
-    input: getArgvOption(['input', 'i']),
-    output: getArgvOption(['output', 'o']),
-    append: getArgvOption(['append', 'a']),
+    help: !!reap.flag(['h', 'help']),
+    verbose: !!reap.flag(['v', 'verbose']),
+    dry: !!reap.flag(['n', 'dry']),
+    version: !!reap.flag('version'),
+    env: !!reap.flag('env'),
+    overwrite: !!reap.flag('overwrite'),
+    input: reap.opt(['i', 'input']),
+    output: reap.opt(['o', 'output']),
+    append: reap.opt(['a', 'append']),
   };
   istruc.ctx = ctx;
 
   if (ctx.help) {
-    if (hasArgvFlags(['lang', 'l'])) {
+    if (reap.flag(['lang', 'l'])) {
       console.log('All Lang Extensions\n> ' + Object.keys(extensions).sort().join(', '));
       return true;
     }
@@ -296,53 +295,42 @@ const parseArgs = () => {
     return true;
   }
 
-  const ctxKeys = Object.keys(ctx);
-  const optKeys = Object.keys(DEFAULT_OPTIONS);
-  let argv = ARGV;
-  let target: string | null = null;
-  let optionTuples = getArgvOptionTuple(argv);
-
-  if (!IS_PIPED && !ctx.input) {
-    // attempt to get input positional
-    const pos = getArgvPositional(ctxKeys.concat(optKeys), argv);
-    target = pos?.pop() ?? null;
-    argv = target ? argv.filter(val => val !== target) : argv;
-    optionTuples = getArgvOptionTuple(argv);
+  // reap flag values for comment-directive
+  for (const [key, _val] of toEntries(CLI_FLAGS)) {
+    istruc.options[key] = reap.flag(key) ?? false;
   }
 
-  const skipKeys: string[] = [];
-  for (const key of CMT_OPTIONS_BOOL) {
-    const val = getArgv(key, argv);
-    if (val === null) { continue; }
-    skipKeys.push(key);
-    istruc.options[key] = !!(getBooly(val) ?? DEFAULT_OPTIONS[key]);
-  }
-  for (const key of CMT_OPTIONS_PRIM) {
-    const val = getArgv(key, argv);
-    if (val === null) { continue; }
-    skipKeys.push(key);
-    istruc.options[key] = ((typeof val === 'string'
-      ? (Number.isNaN(Number(val)) ? !!getBooly(val) : Number(val) as 1)
-      : val) ?? DEFAULT_OPTIONS[key]);
+  // reap option values for comment-directive
+  for (const [key, val] of toEntries(CLI_OPTS)) {
+    const opt = reap.opt(key);
+    if (opt === null) { continue; }
+    const num = Number(opt);
+    istruc.options[key] = typeof opt === 'boolean'
+      ? opt
+      : (num === 1 || num === 2) ? num : val;
   }
 
-  for (const [key, val] of optionTuples) {
-    if (key === 'lang' || key === 'l') {
-      const lang = extensions[val as 'js'] as CommentRegexOption;
-      if (!lang) {
-        process.stderr.write(`[ERRO] bad --lang option key of: "${val}"`
-        + `\n     > all/langs: ${Object.keys(extensions).join(', ')}`);
-        return false;
-      }
-      istruc.options.multi = lang.multi;
-      istruc.options.single = lang.single ?? istruc.options.single;
-      continue;
-    }
-    // cli ctx already handled at this point
-    if (skipKeys.includes(key) || ctxKeys.includes(key)) { continue; }
-    if (optKeys.includes(key)) { (istruc.options as any)[key] = val; continue; }
-    istruc.directives[key] = val;
+  // get custom lang and err out if no match
+  const lang = (reap.opt(['l', 'lang']) ?? 'js') as 'js';
+  const lext = extensions[lang] as CommentRegexOption;
+  if (!lext) {
+    process.stderr.write(`[ERRO] bad --lang option key of: "${lang}"`
+    + `\n     > all/langs: ${Object.keys(extensions).join(', ')}`);
+    return false;
   }
+  istruc.options.multi = lext.multi;
+  istruc.options.single = lext.single ?? istruc.options.single;
+
+  // loop/check for other possible comment-directive options
+  for (const key of toKeys(DEFAULT_OPTIONS)) {
+    const opt = reap.opt(key);
+    if (opt === null) { continue; }
+    (istruc.options as any)[key] = opt;
+  }
+
+  // last, but not least, get the positional is any
+  const target = !IS_PIPED && !ctx.input ? reap.pos().pop() ?? null : null;
+
   istruc.ctx.input = istruc.ctx.input ?? target ?? null;
   // ###[IF]node=1;rm=1L;
   istruc.ctx.input = istruc.ctx.input ? path.resolve(path.normalize(istruc.ctx.input)) : istruc.ctx.input;
