@@ -179,7 +179,7 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
     }
 
     if (typeof content !== 'string') {
-      process.stderr.write(`[ERRO] Failed to read/parse input... should never happen`);
+      process.stderr.write('[ERRO] Failed to read/parse input... should never happen');
       return false;
     }
 
@@ -188,7 +188,7 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
 
     if (dry) {
       console.log(`[DRY RUN] write to: ${output}`);
-      console.log(`[DRY RUN] preview (first 300 chars):\n`);
+      console.log('[DRY RUN] preview (first 300 chars):\n');
       console.log(result.substring(0, 300) + (result.length > 300 ? '...' : '') + '\n');
       return true;
     }
@@ -203,7 +203,7 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
 
     // ensures no foot is blown off; otherwise trust the output is true
     if (input && (input === output) && !overwrite) {
-      process.stderr.write(`[ERRO] Need to use --overwrite to overwrite the input (!DANGER-ZONE!)`);
+      process.stderr.write('[ERRO] Need to use --overwrite to overwrite the input (!DANGER-ZONE!)');
       return false;
     }
 
@@ -251,7 +251,7 @@ const parseArgs = () => {
 
   if (ctx.help) {
     if (hasArgvFlags(['lang', 'l'])) {
-      console.log(`All Lang Extensions\n> ` + Object.keys(extensions).sort().join(', '));
+      console.log('All Lang Extensions\n> ' + Object.keys(extensions).sort().join(', '));
       return true;
     }
 
