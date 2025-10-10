@@ -540,8 +540,8 @@ const lesserFunction = (arg = ':('): number => {
   test('two-way raw regex from README note', () => {
     const options = {
       keepDirective: true, // prevents comment directive from being removed
-      delimiter: '##',     // changes sed delimiter from '/' to '##'
-      escape: false,       // disables string escape (needed to use regex)
+      delimiter: '##', // changes sed delimiter from '/' to '##'
+      escape: false, // disables string escape (needed to use regex)
     };
 
     const result1 = commentDirective(RAW_REGEX_TWOWAY_INPUT, { rexy: 1 }, options);

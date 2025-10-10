@@ -331,9 +331,9 @@ const createDirectiveRegex = (() => {
     const [astart, aend] = options.loose
       ? ['', '']
       : [
-          start.startsWith('^') ? '' : '^',
-          end?.endsWith('$') ? '' : '\\s*?$',
-        ];
+        start.startsWith('^') ? '' : '^',
+        end?.endsWith('$') ? '' : '\\s*?$',
+      ];
     cache = {
       scar: toRegex(singleStart, escape), // single start
       scdr: singleEnd ? toRegex(singleEnd, escape) : null, // single end
@@ -976,7 +976,7 @@ const applyDirective = (
       out.push(pre + addPad(
         [ [-2, msMatchF, pre.length] ],
         jline.substring(imcar + msMatchF[0].length),
-      ));  // pre + content
+      )); // pre + content
       continue;
     }
     // last line
@@ -1080,7 +1080,7 @@ export const commentDirective = (
     let isGlobalSed = false;
     // 10000 loop limit - could happen with a bad user sed directive
     // eslint-disable-next-line @stylistic/max-len
-    if (iquitAt > 1e4) { throw new Error(`[commentDirective] 10,000-loop limit was hit, either a recursive loop or an absurd use-case; instead of going to infinity and beyond, bailing...`); }
+    if (iquitAt > 1e4) { throw new Error('[commentDirective] 10,000-loop limit was hit, either a recursive loop or an absurd use-case; instead of going to infinity and beyond, bailing...'); }
     iquitAt++;
     // keep loop'ing till stable -> no comment directives left that make changes
     if (!ibreak) { break; }
@@ -1092,17 +1092,17 @@ export const commentDirective = (
     lines = !loose || out.length
       ? lines
       : (lines as string[]).reduce((lout, line) => {
-          // initial check(s) to bail out fast
-          if (minDirLen >= line.length || line.indexOf(identifier) === -1) {
-            return lout.concat(line);
-          }
-          const rdir = re.dir.exec(line)?.[0] ?? '';
-          // if comment directive but on it's own line
-          if (!line.replace(rdir, '').trim().length) { return lout.concat(line); }
-          const id = dkeep ? `${LOOSE_PLACEHOLE}${looseStack.length}` : '';
-          id.length && looseStack.push([id, rdir]);
-          return lout.concat([line.replace(rdir, id), rdir + (looseRm as string)]);
-        }, [] as string[]);
+        // initial check(s) to bail out fast
+        if (minDirLen >= line.length || line.indexOf(identifier) === -1) {
+          return lout.concat(line);
+        }
+        const rdir = re.dir.exec(line)?.[0] ?? '';
+        // if comment directive but on it's own line
+        if (!line.replace(rdir, '').trim().length) { return lout.concat(line); }
+        const id = dkeep ? `${LOOSE_PLACEHOLE}${looseStack.length}` : '';
+        id.length && looseStack.push([id, rdir]);
+        return lout.concat([line.replace(rdir, id), rdir + (looseRm as string)]);
+      }, [] as string[]);
 
     // global sed loop(s)
     for (let i = iglobal; i < lines.length; i++) {

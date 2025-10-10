@@ -161,7 +161,7 @@ const TYPESCRIPT_CONFIG = {
     '@stylistic/no-floating-decimal': ['error'],
     '@stylistic/no-mixed-operators': ['error'],
     '@stylistic/no-mixed-spaces-and-tabs': ['error', 'smart-tabs'],
-    '@stylistic/no-multi-spaces': ['warn', {exceptions: {VariableDeclarator: true, ImportDeclaration: true}}],
+    '@stylistic/no-multi-spaces': ['warn', {ignoreEOLComments: true, exceptions: {VariableDeclarator: true, ImportDeclaration: true}}],
     '@stylistic/no-multiple-empty-lines': ['warn', { max: 2, maxEOF: 2, maxBOF: 2 }],
     '@stylistic/no-tabs': ['error'],
     '@stylistic/no-trailing-spaces': ['warn', { ignoreComments: true }],
