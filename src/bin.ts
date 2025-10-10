@@ -6,10 +6,14 @@
 /* eslint-disable @stylistic/max-len */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {getMeta} from './_macro_' with { type: 'macro'};
+import cliReap from 'cli-reap';
+import { IS_QUICKJS } from 'globables';
+import { createStain } from 'stain';
 import {
   prettyPrintJson,
   toEntries,
   toKeys,
+  castBooly,
 } from './bin.utils.ts';
 import {
   DEFAULT_OPTIONS,
@@ -33,7 +37,6 @@ import * as std from 'qjs:std';
 // ###[IF]node=1;rm=3L;
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { cliReapLoose } from 'cli-reap';
 
 type CommentDirectives = Record<string, boolean | number | string>;
 
@@ -297,7 +300,11 @@ const parseArgs = () => {
 
   // reap flag values for comment-directive
   for (const [key, _val] of toEntries(CLI_FLAGS)) {
-    istruc.options[key] = reap.flag(key) ?? false;
+    // need to check for opt first if '--escape false' notation
+    istruc.options[key] = castBooly(reap.opt(key))
+      ?? reap.flag(key)
+      ?? CLI_FLAGS[key]
+      ?? false;
   }
 
   // reap option values for comment-directive
@@ -305,9 +312,9 @@ const parseArgs = () => {
     const opt = reap.opt(key);
     if (opt === null) { continue; }
     const num = Number(opt);
-    istruc.options[key] = typeof opt === 'boolean'
-      ? opt
-      : (num === 1 || num === 2) ? num : val;
+    istruc.options[key] = (num === 1 || num === 2)
+      ? num
+      : castBooly(opt) ?? val;
   }
 
   // get custom lang and err out if no match
@@ -328,10 +335,25 @@ const parseArgs = () => {
     (istruc.options as any)[key] = opt;
   }
 
-  // last, but not least, get the positional is any
+  // get the positional is any
   const target = !IS_PIPED && !ctx.input ? reap.pos().pop() ?? null : null;
 
-  istruc.ctx.input = istruc.ctx.input ?? target ?? null;
+  // last, but not least, we snag all possible option keys and assume they are directives;
+  // if double-dash/end-of-options present assume last arg is the input
+  const [posits, eofInput] = reap.end()
+    ? [reap.cur().slice(0, reap.cur().indexOf('--')), reap.pos().pop()]
+    : [reap.cur(), null];
+  const posDirectives = posits.filter(val => val.startsWith('-'));
+  for (const opt of posDirectives) {
+    let key = opt.replace(/^--?/, '');
+    if (!key.length) { continue; }
+    key = key.split('=')[0] ?? key;
+    const val = reap.opt(key);
+    if (val === null) { continue; }
+    istruc.directives[key] = val;
+  }
+
+  istruc.ctx.input = eofInput ?? istruc.ctx.input ?? target ?? null;
   // ###[IF]node=1;rm=1L;
   istruc.ctx.input = istruc.ctx.input ? path.resolve(path.normalize(istruc.ctx.input)) : istruc.ctx.input;
   // ###[IF]node=1;rm=1L;
