@@ -45,7 +45,7 @@ type Options = {
   version: boolean;
   env: boolean;
   overwrite: boolean;
-  append: string | null;
+  banner: string | null;
   input: string | null;
   output: string | null;
 };
@@ -129,7 +129,7 @@ const ensureDirSync = (filePath: string, verbose = false) => {
 
 const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
   try {
-    const {append, input, overwrite, dry, verbose} = ctx;
+    const {banner, input, overwrite, dry, verbose} = ctx;
     const output = ctx.output ? ctx.output : (overwrite ? input : null);
     let content: string | null = null;
     if (IS_PIPED) {
@@ -182,7 +182,7 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
     }
 
     // process the content with comment directive
-    const result = (append ? append : '') + commentDirective(content, directives, options);
+    const result = (banner ? banner + '\n' : '') + commentDirective(content, directives, options);
 
     if (dry) {
       console.log(`[DRY RUN] write to: ${output}`);
@@ -244,7 +244,7 @@ const parseArgs = () => {
     overwrite: !!reap.flag('overwrite'),
     input: reap.opt(['i', 'input']),
     output: reap.opt(['o', 'output']),
-    append: reap.opt(['a', 'append']),
+    banner: reap.opt(['b', 'banner']),
   };
   istruc.ctx = ctx;
 
