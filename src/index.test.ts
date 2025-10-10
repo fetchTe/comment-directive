@@ -1035,7 +1035,7 @@ describe('remove comments', () => {
   });
 
   test('remove/mod single-line comment cond nested - position', () => {
-    const moveDirective = `// ###[IF]other=5;un=comment;`;
+    const moveDirective = '// ###[IF]other=5;un=comment;';
     const template = `
     ${moveDirective}
     // ###[IF]other=4;rm=comment;

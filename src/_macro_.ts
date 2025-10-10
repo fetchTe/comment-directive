@@ -18,7 +18,7 @@ const getGitCommitHash = () => {
   try {
     return execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
   } catch (err) {
-    console.error(`[getGitCommitHash] `
+    console.error('[getGitCommitHash] '
       + (((err instanceof Error) ? err.message : null) ?? 'unknown error'));
   }
   return 'unknown';

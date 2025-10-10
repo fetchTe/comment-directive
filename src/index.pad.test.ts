@@ -26,7 +26,7 @@ const SLL =  '~'.repeat(60) + '\n';
 
 const TESTS: [id: string, test: string, options: Partial<CommentOptions> | null][] = [
   [
-    `pad.single.part.manual.snap`,
+    'pad.single.part.manual.snap',
     `
 ${SPC}// ###[IF]test=1;un=comment;${SPC}
 ${SPC}// test${SPC}
@@ -85,7 +85,7 @@ ${SLL}
 
 
   [
-    `pad.single.full.manual.snap`,
+    'pad.single.full.manual.snap',
     `
 <!-- ###[IF]test=1;un=comment;${SPC} -->
 ${SPC}<!--${SPC}test${SPC}-->${SPC}
@@ -121,7 +121,7 @@ ${SLL}
 
 
   [
-    `pad.multi.un.manual.snap`,
+    'pad.multi.un.manual.snap',
     `
 ${SPC}// ###[IF]test=1;un=comment;${SPC}
 ${SPC}/*${SPC}test${SPC}*/${SPC}
@@ -224,7 +224,7 @@ ${SLL}
 
 
   [
-    `pad.multi.rm.manual.snap`,
+    'pad.multi.rm.manual.snap',
     `
 ${SPC}// ###[IF]test=1;rm=comment;${SPC}
 ${SPC}/*${SPC}test${SPC}*/${SPC}
