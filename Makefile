@@ -169,12 +169,16 @@ release: ## clean, setup, build, lint, test, aok (everything but the kitchen sin
 	@# buid in prod with IS_TEST (skip min builds)
 	@$(MAKE) ENV="PROD" TEST="1" MIN="0" _build_code_factory || { $(MAKE) MSG="build_code target failed... abort" _erro; exit 1; }
 	@$(MAKE) build_bin
+	@# need to build quickjs executable to test against
+	@$(MAKE) build_bin_quickjs
 	@# lint es/ts (must run indv in order to exit properly)
 	@$(MAKE) MSG="release:lint" SYM="--" COLOR="1;36" _init
 	@$(MAKE) BAIL="1" lint_eslint || { $(MAKE) MSG="target lint_eslint failed..." _erro; exit 1; }
 	@$(MAKE) BAIL="1" lint_tsc || { $(MAKE) MSG="target lint_tsc failed..." _erro; exit 1; }
 	@# run tests (could also be run pre-lint if preferred)
 	@$(MAKE) _BPOS="test" _BOUT="$(TES)" ENV="TEST" _bun_factory
+	@# remove exe/quickjs bin from release -> packaged seperatly via tagged release
+	@$(CMD_RM) $(DST)/comment-directive || true
 	@# everythings aok -> re-build with min builds and without IS_TEST
 	@$(MAKE) MSG="release:build" SYM="--" COLOR="1;36" _init
 	@$(CMD_RM) "$(DST)" || true
@@ -182,8 +186,6 @@ release: ## clean, setup, build, lint, test, aok (everything but the kitchen sin
 	@$(MAKE) ENV="PROD" TEST="0" MIN="$(MIN)" _build_code_factory
 	@$(MAKE) build_bin
 	@$(MAKE) MSG="release" LEN="-1" _done
-	@# remove exe/quickjs bin from npm release
-	@# $(CMD_RM) $(DST)/comment-directive || true
 
 
 #------------------------------------------------------------------------------#
@@ -207,9 +209,12 @@ build_bin:  ## builds node bin output
 	@$(MAKE) MSG="build_bin" LEN="-1" _done
 
 .PHONY: build_bin_quickjs
-build_bin_quickjs:  ## compiles quickjs binary
+build_bin_quickjs:  ## compiles quickjs binary/executable
 	@$(MAKE) MSG="build_bin_quickjs" LEN="-1" _init
-	@$(BIN_BUN) run $(SRC)/bin.ts --escape  --node=1 --input=$(SRC)/bin.ts --output=$(SRC)/bin.quickjs.ts
+	@$(BIN_BUN) run $(SRC)/bin.ts --escape  --node=1 \
+		--input=$(SRC)/bin.ts \
+		--output=$(SRC)/bin.quickjs.ts \
+		--banner="// !! AUTO GENERATED <-> DO NOT EDIT DIRECTLY !!"
 	@$(MAKE) ENT="$(SRC)/bin.quickjs.ts" MIN="0" CJS="0" _bun_code_factory
 	@$(BIN_QJS) --std --module --compile "$(DST)/bin.quickjs.js" --out $(DST)/comment-directive
 	@$(MAKE) MSG="build_bin_quickjs" LEN="-1" _done
