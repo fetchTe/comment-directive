@@ -136,6 +136,7 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
     const output = ctx.output ? ctx.output : (overwrite ? input : null);
     let content: string | null = null;
     if (IS_PIPED) {
+      content = '';
       // ###[IF]node=1;rm=1L;
       for await (const chunk of process.stdin) { content += chunk; }
       // ###[IF]node=1;un=comment;
