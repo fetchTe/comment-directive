@@ -62,10 +62,10 @@ type Struc = {
 // ###[IF]node=1;un=comment;
 /*
 // @ts-expect-error 'in' is a resvered key so can't defined in d.ts
-const IS_PIPED = !os.isatty(std.in.fileno());
+let IS_PIPED = !os.isatty(std.in.fileno());
 */
 // ###[IF]node=1;rm=1L;
-const IS_PIPED = !process.stdin.isTTY;
+let IS_PIPED = !process.stdin.isTTY;
 
 // comment-directive options that are flags
 const CLI_FLAGS = {
@@ -336,6 +336,9 @@ const parseArgs = () => {
     if (opt === null) { continue; }
     (istruc.options as any)[key] = opt;
   }
+
+  // ignore pipe if explict input set
+  if (istruc.ctx.input) { IS_PIPED = false; }
 
   // get the positional is any
   const target = !IS_PIPED && !ctx.input ? reap.pos().pop() ?? null : null;
