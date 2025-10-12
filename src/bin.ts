@@ -7,8 +7,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {getMeta} from './_macro_' with { type: 'macro'};
 import cliReap from 'cli-reap';
-import { IS_QUICKJS } from 'globables';
-import { createStain } from 'stain';
+import {
+  createStain,
+  getColorSpace,
+} from 'stain';
 import {
   prettyPrintJson,
   toEntries,
@@ -88,6 +90,15 @@ const CLI_OPTS = {
 } as const;
 
 
+// ###[IF]node=1;rm=line;
+const COLOR_SPACE = getColorSpace();
+// ###[IF]node=1;un=comment;
+// const COLOR_SPACE = getColorSpace(undefined, std?.getenviron?.(), undefined, os.isatty(std.out.fileno()));
+console.log('COLOR_SPACE: ', COLOR_SPACE);
+
+// ANSI cli color stainer
+// @NOTE: quickjs requires use of std.getenviron to get ENV vars needed for colorSpace
+const stain = createStain({colorSpace: COLOR_SPACE});
 
 const ensureDirSync = (filePath: string, verbose = false) => {
   verbose && console.log(`[INFO] ensureDirSync: ${filePath}`);
