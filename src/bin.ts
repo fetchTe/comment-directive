@@ -73,9 +73,10 @@ const CLI_FLAGS = {
   loose: DEFAULT_OPTIONS.loose,
   nested: DEFAULT_OPTIONS.nested,
   disableCache: DEFAULT_OPTIONS.disableCache,
-  throw: DEFAULT_OPTIONS.throw,
   keepDirective: DEFAULT_OPTIONS.keepDirective,
   keepEmpty: DEFAULT_OPTIONS.keepEmpty,
+  // if cli, we want to throw an error to set the exit status
+  throw: true,
 } as const;
 
 // comment-directive options that are primitaves (not flags)
