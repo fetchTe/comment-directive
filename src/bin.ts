@@ -53,7 +53,7 @@ type Options = {
   output: string | null;
 };
 
-type Struc = {
+type Args = {
   options: CommentOptions;
   directives: CommentDirectives;
   ctx: Options;
@@ -87,11 +87,6 @@ const CLI_OPTS = {
   keepPadEmpty: DEFAULT_OPTIONS.keepPadEmpty,
 } as const;
 
-const istruc: Struc  = {
-  options: {...DEFAULT_OPTIONS},
-  directives: {},
-  ctx: {} as Options,
-};
 
 
 const ensureDirSync = (filePath: string, verbose = false) => {
@@ -251,7 +246,14 @@ const parseArgs = () => {
     output: reap.opt(['o', 'output']),
     banner: reap.opt(['b', 'banner']),
   };
-  istruc.ctx = ctx;
+
+  // arg param for cli()
+  const iargs: Args  = {
+    ctx,
+    options: {...DEFAULT_OPTIONS},
+    directives: {},
+  };
+
 
   if (ctx.help) {
     if (reap.flag(['lang', 'l'])) {
@@ -303,7 +305,7 @@ const parseArgs = () => {
   // reap flag values for comment-directive
   for (const [key, _val] of toEntries(CLI_FLAGS)) {
     // need to check for opt first if '--escape false' notation
-    istruc.options[key] = castBooly(reap.opt(key))
+    iargs.options[key] = castBooly(reap.opt(key))
       ?? reap.flag(key)
       ?? CLI_FLAGS[key]
       ?? false;
@@ -314,7 +316,7 @@ const parseArgs = () => {
     const opt = reap.opt(key);
     if (opt === null) { continue; }
     const num = Number(opt);
-    istruc.options[key] = (num === 1 || num === 2)
+    iargs.options[key] = (num === 1 || num === 2)
       ? num
       : castBooly(opt) ?? val;
   }
@@ -334,11 +336,11 @@ const parseArgs = () => {
   for (const key of toKeys(DEFAULT_OPTIONS)) {
     const opt = reap.opt(key);
     if (opt === null) { continue; }
-    (istruc.options as any)[key] = opt;
+    (iargs.options as any)[key] = opt;
   }
 
   // ignore pipe if explict input set
-  if (istruc.ctx.input) { IS_PIPED = false; }
+  if (iargs.ctx.input) { IS_PIPED = false; }
 
   // get the positional is any
   const target = !IS_PIPED && !ctx.input ? reap.pos().pop() ?? null : null;
@@ -355,33 +357,39 @@ const parseArgs = () => {
     key = key.split('=')[0] ?? key;
     const val = reap.opt(key);
     if (val === null) { continue; }
-    istruc.directives[key] = val;
+    iargs.directives[key] = val;
   }
 
-  istruc.ctx.input = eofInput ?? istruc.ctx.input ?? target ?? null;
+  iargs.ctx.input = eofInput ?? iargs.ctx.input ?? target ?? null;
   // ###[IF]node=1;rm=1L;
-  istruc.ctx.input = istruc.ctx.input ? path.resolve(path.normalize(istruc.ctx.input)) : istruc.ctx.input;
+  iargs.ctx.input = iargs.ctx.input ? path.resolve(path.normalize(iargs.ctx.input)) : iargs.ctx.input;
   // ###[IF]node=1;rm=1L;
-  istruc.ctx.output = istruc.ctx.output ? path.resolve(path.normalize(istruc.ctx.output)) : istruc.ctx.output;
+  iargs.ctx.output = iargs.ctx.output ? path.resolve(path.normalize(iargs.ctx.output)) : iargs.ctx.output;
   // ###[IF]node=1;un=comment;
   /*
-  const [ipath, ierr] = istruc.ctx.input ? os.realpath(istruc.ctx.input) : [istruc.ctx.input, null];
-  istruc.ctx.input = !ierr && ipath ? ipath : istruc.ctx.input;
-  const [opath, oerr] = istruc.ctx.output ? os.realpath(istruc.ctx.output) : [istruc.ctx.output, null];
-  istruc.ctx.output = !oerr && opath ? opath : istruc.ctx.output;
+  const [ipath, ierr] = iargs.ctx.input ? os.realpath(iargs.ctx.input) : [iargs.ctx.input, null];
+  iargs.ctx.input = !ierr && ipath ? ipath : iargs.ctx.input;
+  const [opath, oerr] = iargs.ctx.output ? os.realpath(iargs.ctx.output) : [iargs.ctx.output, null];
+  iargs.ctx.output = !oerr && opath ? opath : iargs.ctx.output;
   */
 
+  iargs.options.multi = lext.multi;
+  iargs.options.single = lext.single ?? iargs.options.single;
+
   if (ctx.env || ctx.verbose) {
-    console.log(`> ${getMeta().name} (v${getMeta().version})
-# TARGET    : ${istruc.ctx.input ?? (IS_PIPED ? 'piped' : '???')}
-# OUTPUT    : ${istruc.ctx.output ?? 'stdout'}`);
-    console.log(`# CLI OPTIONS\n${prettyPrintJson(ctx)}`);
-    console.log(`# COMMENT DIRECTIVE OPTIONS\n${prettyPrintJson(istruc.options)}`);
-    console.log(`# COMMENT DIRECTIVE ARGUMENTS\n${prettyPrintJson(istruc.directives)}`);
+    const cmtd = '(' + stain.cyan('comment-directive') + ')';
+    const tt = (val = '') => stain.black.bold.white.bg('#') + ' ' + stain.bold.underline(val);
+    console.log(`> ${stain.cyan.bold(getMeta().name)} (v${getMeta().version})
+${tt('TARGET')}    : ${stain.green(iargs.ctx.input ?? (IS_PIPED ? 'piped' : '???'))}
+${tt('OUTPUT')}    : ${stain.green(iargs.ctx.output ?? 'stdout')}`);
+    console.log(`${tt('OPTIONS (cli)')}\n${prettyPrintJson(ctx)}`);
+    console.log(`${tt('OPTIONS ' + cmtd)}\n${prettyPrintJson(iargs.options)}`);
+    console.log(`${tt('ARGUMENTS ' + cmtd)}\n${prettyPrintJson(iargs.directives)}`);
   }
   if (ctx.env) { return true; }
 
-  return cli(istruc);
+  const res = await cli(iargs);
+  return res;
 };
 
 
