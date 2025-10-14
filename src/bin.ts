@@ -261,6 +261,65 @@ const cli = async ({ctx, options, directives}: Args): Promise<boolean> => {
 
 const parseArgs = () => {
   const reap = cliReapLoose();
+/**
+ * prints the formatted help and usage message to stdout
+ * @return {void}
+ */
+const logHelpMsg = () => {
+  const title = stain.white.bold;
+  const toTitle = (val: string) => stain.black.white.bg.bold('#') + ' ' + title(val);
+  const g = stain.white.dim;
+  const b = stain.iblue;
+  const y = stain.yellow;
+  const bl = stain.bold;
+  const cy = stain.cyan;
+  const pu = stain.purple.bold;
+  const rr = stain.red.bold.underline;
+  const kv = bl('value');
+  const ver = g(`(v${getMeta().version})`);
+  const bo = g('[');
+  const be = g(']');
+  const ll = g('┈ '.repeat(3));
+  const lll = g('┈ '.repeat(4));
+  const name = getMeta().name;
+  console.log(`
+${toTitle('USAGE')} ${ver}
+  ${bl(name)} ${bo}${b('options')}...${be} ${bo}${g('--')}${y('directive')}=<${kv}>...${be} <${pu('input')}>
+
+${toTitle('DIRECTIVE')}
+  --<${y('key')}>=<${kv}>  ${ll} key-value flags (controls ${name} conditional logic)
+  --${bo}${y('opt')}${be}=${bo}${kv}${be}  ${ll} options for ${name}; value-less flags == true
+                          (e.g: --${y('keepDirective')} --${y('loose')} --${y('escape')}=false)
+
+${toTitle('OPTIONS')}
+  -${b('b')}, --${b('banner')}     <${bl('str')}>  Append string atop output to indicate it's auto-generated
+  -${b('i')}, --${b('input')}     <${pu('file')}>  Specify the input; overrides the positional argument;
+                          reads from stdin (piped) if no input positional/option defined
+  -${b('o')}, --${b('output')}    <${bl('file')}>  Specify the output; defaults to stdout
+  -${b('l')}, --${b('lang')}       <${bl('ext')}>  Set explicit language syntax for comments (e.g: 'js', 'py', 'html');
+                           if unset, uses the file extension if valid; otherwise falls back to (c-like) 'js'
+      --${b('overwrite')}         Overwrite input if: no output or the same (${rr('DANGER_ZONE')})
+
+  -${b('n')}, --${b('dry-run')}   ${ll}  Perform a dry run (without writing to a file) & print preview
+  -${b('v')}, --${b('verbose')}   ${ll}  Enable verbose logging for debugging
+  -${b('h')}, --${b('help')}    ${lll}  Display this help message and exit
+      --${b('version')}   ${ll}  Display the version number and exit
+      --${b('env')}     ${lll}  Print all parsed arguments, options, and directives, then exit;
+                          useful for debugging how the CLI interprets input/options
+
+${toTitle('EXAMPLES')}
+  `.replaceAll(/(\s)(-+)/g, g(' $2'))
+    .replaceAll(/(\.\.+|<|>|=|'|,|:|;|\)|\()/g, g('$1'))
+    .replaceAll(name, cy(name)) + `
+  ${g(`# process 'input.ts' with a comment directive of '--prod=1' with stdout output`)}
+  ${name} --${y('prod')}=1 --banner="// AUTO GENERATED" ${pu('input.ts')}
+  ${g(`# 'in.py' input to 'out.py' output with a mix of options/directives`)}
+  ${name} --${b('lang')}=py --${y('keepPadEmpty')}=false --${y('isCmt')}=1 -${b('o')} out.py ${pu('in.py')}
+  ${g('# pipe content and redirect the processed output to a new file')}
+  cat ${pu('input.md')} | ${name} --${b('lang')}=md --${y('kool')}=1 > output.md
+`.trim().replaceAll(name, cy(name)));
+};
+
 
   const ctx: Options = {
     help: !!reap.flag(['h', 'help']),
@@ -287,39 +346,7 @@ const parseArgs = () => {
       console.log('All Lang Extensions\n> ' + Object.keys(extensions).sort().join(', '));
       return true;
     }
-
-    console.log(`
-# USAGE (v${getMeta().version} - github.com/fetchTe/comment-directive)
-  ${getMeta().name} [options...] [--directive=<value>...] [input_file]
-
-# DIRECTIVE
-  --<key>=<value>       comment-directive key-value flags (controls the conditional logic)
-  --[opt]=[value]       comment-directive options; value-less flags are treated as true
-                        (e.g: --keepDirective=true --loose)
-
-# OPTION
-  -i, --input   <file>  Specify the input; overrides the positional argument;
-                        Reads from stdin (piped) if no input positional/option defined
-  -o, --output  <file>  Specify the output; defaults to stdout
-  -a, --append   <str>  Append string atop output to indicate it's auto-generated
-  -l, --lang     <ext>  Set language syntax for comments (e.g: 'js', 'py', 'html')
-      --overwrite       Overwrite input if: no output or the same (DANGER_ZONE)
-
-  -n, --dry-run         Perform a dry run (without writing to a file) & print preview
-  -v, --verbose         Enable verbose logging for debugging
-  -h, --help            Display this help message and exit
-      --version         Display the version number and exit
-      --env             Print all parsed arguments, options, and directives, then exit;
-                        Useful for debugging how the CLI interprets input/options
-
-# EXAMPLES
-  # process 'input.ts' with a comment directive of '--prod=1' with stdout output
-  ${getMeta().name} --prod=1 input.ts
-  # 'in.py' input to 'out.py' output with a mix of options/directives
-  ${getMeta().name} --lang=py --keepPadEmpty=false --isCmt=1 -o out.py in.py
-  # pipe content and redirect the processed output to a new file
-  cat input.md | ${getMeta().name} --lang=md --kool=1 > output.md
-`);
+    logHelpMsg();
     return true;
   }
 
