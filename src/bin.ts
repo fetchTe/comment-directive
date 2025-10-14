@@ -461,7 +461,7 @@ const run = async () => {
       + (((err instanceof Error) ? err.message : null) ?? 'unknown error');
     process.stderr.write(errMsg + '\n');
     // ###[IF]node=1;sed=/process/std/;
-    process.exit(0);
+    process.exit(1);
   }
 };
 run();
