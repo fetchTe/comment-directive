@@ -3,23 +3,304 @@ name: on-release
 env:
   # release artifacts (adjust to fit your use; an empty string will disable)
   #  > tars filename: bun-make.v1.0.2.tar.xz
-  ARTIFACTS   : '/tmp/tars/*.tar*,./dist/index.js,./dist/index.min.js,./dist/lang.js'
+  ARTIFACTS   : './dist/index.js,./dist/index.min.js,./dist/lang.js,/tmp/tars/*.tar*,./dist/comment-directive-*'
   # set to '0' to disable commit links
   LINK_COMMITS: 1
   # set to '0' to consider all tags (otherwise tags must start with 'v')
   SEMVER_ONLY : 1
+  # if/when no previous tag is found, like the first/inital tag
   # if '0' and no previous tag found, will simply use an empty string
   FALLBACK    : 1
+  FALLBACK_TAG: 'v0.0.0'
   # set to '1' to enable action cache (perf/saving is negligible, if at all)
   USE_CACHE   : 0
+
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
+
 
 jobs:
-  build:
+  #----------------------------------------------------------------------------#
+  #@id::build cli for executable builds                                        #
+  #----------------------------------------------------------------------------#
+  build-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: bun::preheat-cache
+        if: env.USE_CACHE == 1
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: bun::preheat-oven
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # install deps & make all
+      - name: make::install
+        run: make install
+      - name: make::release
+        run: make release
+      - name: verify build output
+        run: |
+          ls -la dist/
+          test -f dist/cli.quickjs.js || (echo "dist/cli.quickjs.js not found!" && exit 1)
+
+      - name: upload built project
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-project
+          path: dist/
+          retention-days: 1
+
+
+  #----------------------------------------------------------------------------#
+  #@id::linux executable                                                       #
+  #----------------------------------------------------------------------------#
+  linux:
+    needs: build-cli
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [aarch64, riscv64, x86, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 'quickjs-ng/quickjs'
+          path: 'quickjs-ng'
+      - name: download built project
+        uses: actions/download-artifact@v4
+        with:
+          name: built-project
+          path: dist/
+      - uses: jirutka/setup-alpine@v1
+        with:
+          arch: ${{matrix.arch}}
+          packages: 'build-base make cmake'
+      - name: build quickjs
+        shell: alpine.sh {0}
+        run: |
+          cd quickjs-ng
+          mkdir build
+          cd build
+          cmake -DQJS_BUILD_CLI_STATIC=ON ..
+          cd ..
+          cmake --build build --target qjs_exe -j$(getconf _NPROCESSORS_ONLN)
+
+      - name: compile to executable
+        shell: alpine.sh {0}
+        run: |
+          cd quickjs-ng
+          ./build/qjs -c ../dist/cli.quickjs.js -o ../dist/comment-directive-linux-${{matrix.arch}}
+          chmod +x ../dist/comment-directive-linux-${{matrix.arch}}
+      - name: check
+        shell: alpine.sh {0}
+        run: |
+          file dist/comment-directive-linux-${{matrix.arch}}
+      - name: test executable
+        shell: alpine.sh {0}
+        run: |
+          ./dist/comment-directive-linux-${{matrix.arch}} --version
+
+      - name: functionality test
+        shell: alpine.sh {0}
+        run: |
+          # Create temp file with test content
+          cat > tmp.txt << 'EOF'
+          // ###[IF]test=1;sed=/test/a_ok/;
+          test
+          EOF
+          
+          # Run comment-directive with test parameters
+          ./dist/comment-directive-linux-${{matrix.arch}} --test=1 --input=tmp.txt --output=result.txt
+          
+          # Check output result
+          expected_output="a_ok"
+          actual_output=$(cat result.txt)
+          
+          if [ "$actual_output" = "$expected_output" ]; then
+            echo "[aOK] Functionality test passed: output matches expected result"
+          else
+            echo "[FAIL] Functionality test failed"
+            echo "Expected: '$expected_output'"
+            echo "Actual: '$actual_output'"
+            exit 1
+          fi
+
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-directive-linux-${{matrix.arch}}
+          path: dist/comment-directive-linux-${{matrix.arch}}
+
+
+  #----------------------------------------------------------------------------#
+  #@id::macos executable (intel/silicon)                                       #
+  #----------------------------------------------------------------------------#
+  macos:
+    needs: build-cli
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 'quickjs-ng/quickjs'
+          path: 'quickjs-ng'
+      - name: download built project
+        uses: actions/download-artifact@v4
+        with:
+          name: built-project
+          path: dist/
+      - name: build quickjs
+        run: |
+          cd quickjs-ng
+          mkdir build
+          cd build
+          cmake -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" ..
+          make -j$(getconf _NPROCESSORS_ONLN)
+
+      - name: compile to executable
+        run: |
+          cd quickjs-ng
+          ./build/qjs -c ../dist/cli.quickjs.js -o ../dist/comment-directive-darwin
+          chmod +x ../dist/comment-directive-darwin
+      - name: check
+        run: |
+          lipo -info dist/comment-directive-darwin
+          file dist/comment-directive-darwin
+      - name: test executable
+        run: |
+          ./dist/comment-directive-darwin --version
+
+      - name: functionality test
+        run: |
+          # Create temp file with test content
+          cat > tmp.txt << 'EOF'
+          // ###[IF]test=1;sed=/test/a_ok/;
+          test
+          EOF
+          
+          # Run comment-directive with test parameters
+          ./dist/comment-directive-darwin --test=1 --input=tmp.txt --output=result.txt
+          
+          # Check output result
+          expected_output="a_ok"
+          actual_output=$(cat result.txt)
+          
+          if [ "$actual_output" = "$expected_output" ]; then
+            echo "[aOK] Functionality test passed: output matches expected result"
+          else
+            echo "[FAIL] Functionality test failed"
+            echo "Expected: '$expected_output'"
+            echo "Actual: '$actual_output'"
+            exit 1
+          fi
+
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-directive-darwin
+          path: dist/comment-directive-darwin
+
+
+  #----------------------------------------------------------------------------#
+  #@id::windows executable                                                     #
+  #----------------------------------------------------------------------------#
+  windows:
+    needs: build-cli
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, x86_64]
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 'quickjs-ng/quickjs'
+          path: 'quickjs-ng'
+      - name: download built project
+        uses: actions/download-artifact@v4
+        with:
+          name: built-project
+          path: dist/
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.arch == 'x86' && 'mingw32' || 'ucrt64' }}
+          install: >-
+            git
+            make
+          pacboy: >-
+            cmake:p
+            ninja:p
+            toolchain:p
+      - name: build quickjs
+        run: |
+          cd quickjs-ng
+          make
+
+      - name: compile to executable
+        run: |
+          cd quickjs-ng
+          ./build/qjs.exe -c ../dist/cli.quickjs.js -o ../dist/comment-directive-windows-${{matrix.arch}}.exe
+      - name: check
+        run: |
+          file dist/comment-directive-windows-${{matrix.arch}}.exe
+          ldd quickjs-ng/build/qjs.exe || echo "ldd check skipped"
+      - name: test executable
+        run: |
+          ./dist/comment-directive-windows-${{matrix.arch}}.exe --version
+
+      - name: functionality test
+        run: |
+          # Create temp file with test content
+          cat > tmp.txt << 'EOF'
+          // ###[IF]test=1;sed=/test/a_ok/;
+          test
+          EOF
+          
+          # Run comment-directive with test parameters
+          ./dist/comment-directive-windows-${{matrix.arch}}.exe --test=1 --input=tmp.txt --output=result.txt
+          
+          # Check output result
+          expected_output="a_ok"
+          actual_output=$(cat result.txt)
+          
+          if [ "$actual_output" = "$expected_output" ]; then
+            echo "[aOK] Functionality test passed: output matches expected result"
+          else
+            echo "[FAIL] Functionality test failed"
+            echo "Expected: '$expected_output'"
+            echo "Actual: '$actual_output'"
+            exit 1
+          fi
+
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-directive-windows-${{matrix.arch}}
+          path: dist/comment-directive-windows-${{matrix.arch}}.exe
+
+
+  #----------------------------------------------------------------------------##
+  # @id::release (creates archives and release)                                #
+  #----------------------------------------------------------------------------#
+  build-release:
+    needs: [linux, macos, windows]
     runs-on: ubuntu-latest
     permissions:
       # @required: by create_release_draft (github.com/ncipollo/release-action)
@@ -29,35 +310,39 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: bun::preheat-cache
-        if  : env.USE_CACHE == 1
+        if: env.USE_CACHE == 1
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key : ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
-
       - name: bun::preheat-oven
         uses: oven-sh/setup-bun@v2
         with:
-          # version-opts: latest, canary, <sha>, <ver> (1.2.0)
           bun-version: latest
 
-      # install deps
+      # install deps & make all
       - name: make::install
-        run :  make install
-
-      # the 'make all' target does it all: clean, setup, build, lint, test, aok (the entire jamboree)
+        run: make install
       - name: make::all
-        run :  make all
+        run: make all
+
+      # download all built executables
+      - name: get executable assets
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: list all assets
+        run: ls -la dist/
 
       - name: create::compressed archive
         env:
-          CURRENT_TAG      : ${{ github.ref_name }}
+          CURRENT_TAG: ${{ github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run : |
+        run: |
           #!/bin/sh
           NUK=$(printf '\033[0m')
           CYN=$(printf '\033[0;36m')
@@ -68,84 +353,77 @@ jobs:
           bname="$(basename "${GITHUB_REPOSITORY}")"
           fname="${dpath}${bname}.${CURRENT_TAG}"
           echo "${CYN}[FILE] ${fname}${NUK}"
-          printf "${CYN}%s%*s${NUK}\n" "[${fname}.tar]" 78 "" | tr " " "~"
-          tar --exclude='node_modules' -C "${repo}" -cvf "${fname}".tar .
           printf "${CYN}%s%*s${NUK}\n" "[${fname}.tar.gz]" 75 "" | tr " " "~"
           tar --exclude='node_modules' -C "${repo}" -cvzf "${fname}".tar.gz .
           printf "${CYN}%s%*s${NUK}\n" "[${fname}.tar.xz]" 75 "" | tr " " "~"
           tar --exclude='node_modules' -C "${repo}" -cJf "${fname}".tar.xz .
 
       - name: generate::release-notes
-        id  : generate_notes_notes
+        id: generate_notes_notes
         env:
-          CURRENT_TAG      : ${{ github.ref_name }}
+          CURRENT_TAG: ${{ github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           #!/bin/sh
           git config --global --add safe.directory /github/workspace
+          # this suppress an error occurred when the repository is a complete one
+          git fetch --prune --unshallow || true
+          # its POSIXy
           NUK=$(printf '\033[0m')
           YEL=$(printf '\033[0;33m')
           CYN=$(printf '\033[0;36m')
           gtag=""
-          grng=""
-          # find the latest previous tag
+          grange="0"
           if [ "${SEMVER_ONLY}" = "0" ]; then
             gtag=$(git tag --sort=-v:refname --list "v*" | grep -v "^${CURRENT_TAG}\$" | head -n 1)
           else
             for ref in $(git for-each-ref --sort=-creatordate --format '%(refname)' refs/tags); do
               tag="${ref#refs/tags/}"
               [ "${tag}" = "${CURRENT_TAG}" ] && continue
-              echo "${tag}" | grep -Eq '^v?([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?(\+[0-9A-Za-z-]+)?$' \
-                && gtag="${tag}" \
-                && break
+              echo "${tag}" | grep -Eq '^v?([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?(\+[0-9A-Za-z-]+)?$' && gtag="${tag}" && break
             done
           fi
-          # if no previous tag is found and FALLBACK is enabled use full history
           if [ -z "${gtag}" ] && [ "${FALLBACK}" = "1" ]; then
+            gtag="${FALLBACK_TAG}"
             printf "%s[WARN]%s No previous tag found... using full history\n" "${YEL}" "${NUK}"
-            grng=""
-          elif [ -n "${gtag}" ]; then
+            grange=""
+          fi
+          if [ -n "${gtag}" ]; then
             printf "%s[INFO]%s Comparing: %s%s..HEAD%s\n" "${CYN}" "${NUK}" "${CYN}" "${gtag}" "${NUK}"
-            grng="${gtag}..HEAD"
-          else
-            printf "%s[WARN]%s No previous tag found and FALLBACK=0... skipping release notes\n" "${YEL}" "${NUK}"
-            echo "" >"/tmp/release.md"
-            exit 0
+            grange="${gtag}..HEAD"
           fi
-          # generate the release notes header
-          if [ -n "${gtag}" ] || [ "${FALLBACK}" = "1" ]; then
-            if [ "${LINK_COMMITS}" = "1" ]; then
-              printf "## [\`%s\`](https://github.com/%s/tree/%s)\n\n" "${CURRENT_TAG}" "${GITHUB_REPOSITORY}" "${CURRENT_TAG}" >"/tmp/release.md"
+          if [ -n "${gtag}" ]; then
+            if [ "$LINK_COMMITS" = "1" ]; then
+              printf "## [\`%s\`](https://github.com/%s/tree/%s)\n\n" "${CURRENT_TAG}" "$GITHUB_REPOSITORY" "${CURRENT_TAG}" > /tmp/release.md
             else
-              printf "## \`%s\`\n\n" "${CURRENT_TAG}" >"/tmp/release.md"
+              printf "## \`%s\`\n\n" "${CURRENT_TAG}" > /tmp/release.md
             fi
           fi
-          # generate the release notes content
-          if [ -n "${grng}" ] || [ "${FALLBACK}" = "1" ]; then
+          if [ "${grange}" != "0" ]; then
             if [ "${LINK_COMMITS}" = "1" ]; then
-              git log --oneline "${grng}" | awk -v repo="${GITHUB_REPOSITORY}" '{print "* [`" substr($1, 1, 7) "`](https://github.com/" repo "/commit/" substr($1, 1, 7) ") " substr($0, 9)}' >>"/tmp/release.md"
+              git log --oneline "${grange}" | awk -v repo="${GITHUB_REPOSITORY}" '{print "* [\`" substr($1, 1, 7) "\`](https://github.com/" repo "/commit/" substr($1, 1, 7) ") " substr($0, 9)}' >> /tmp/release.md
             else
-              git log --oneline "${grng}" | sed 's/^/* /' >>"/tmp/release.md"
+              git log --oneline "${grange}" | sed 's/^/* /' >> /tmp/release.md
             fi
-            printf "%s[DONE]%s out: /tmp/release.md\n" "${CYN}" "${NUK}"
+            echo "${CYN}[DONE] out: /tmp/release.md${NUK}"
             printf "${CYN}%s%*s${NUK}\n" "[OUT]" 85 "" | tr " " "~"
-            cat "/tmp/release.md"
+            cat /tmp/release.md
             printf "${CYN}%s%*s${NUK}\n" "[OUT]" 85 "" | tr " " "~"
           else
             printf "%s[WARN]%s EMPTY release notes... no previous tag found and FALLBACK=0\n" "${YEL}" "${NUK}"
-            echo "" >"/tmp/release.md"
+            echo "" > /tmp/release.md
           fi
 
       # create a create draft using the notes we generated in prv action
       - name: create::release-draft
-        id  : create_release_draft
+        id: create_release_draft
         # @docs: https://github.com/ncipollo/release-action
         uses: ncipollo/release-action@v1
-        env :
-          GITHUB_TOKEN     : ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         with:
           artifacts: ${{env.ARTIFACTS}}
-          bodyFile : /tmp/release.md
-          draft    : true
-          name     : Release ${{ github.ref_name }}
+          bodyFile: /tmp/release.md
+          draft: true
+          name: Release ${{ github.ref_name }}

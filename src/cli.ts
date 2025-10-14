@@ -1,10 +1,10 @@
-// !! AUTO GENERATED <-> DO NOT EDIT DIRECTLY !!
 /**                                                                       @about
 @desc: bin for both quickjs executable and npm bin; uses itself to build quickjs
        compliant version of comment-directive which is used to build the executable
-@cmd : make build && make build_bin_quickjs
+@cmd : make build && make build_cli_quickjs
 @NOTE: OS specific builds handled via: .github/workflows/on-release.yml
 ***                                                                           */
+// ###[IF]node=1;sed=/process.stderr.write/std.err.puts/g;
 /* eslint-disable @stylistic/max-len */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {getMeta} from './_macro_' with { type: 'macro'};
@@ -18,7 +18,7 @@ import {
   toEntries,
   toKeys,
   castBooly,
-} from './bin.utils.ts';
+} from './cli.utils.ts';
 import {
   DEFAULT_OPTIONS,
   commentDirective,
@@ -32,10 +32,15 @@ import type {
 import type {
   CommentOptions,
 } from './index.ts';
-
+// ###[IF]node=1;un=comment;
+/*
 // quickJS-NG standard library modules
 import * as os from 'qjs:os';
 import * as std from 'qjs:std';
+*/
+// ###[IF]node=1;rm=3L;
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 type CommentDirectives = Record<string, boolean | number | string>;
 
@@ -58,10 +63,13 @@ type Args = {
   ctx: Options;
 };
 
-
+// ###[IF]node=1;un=comment;
+/*
 // @ts-expect-error 'in' is a resvered key so can't defined in d.ts
 let IS_PIPED = !os.isatty(std.in.fileno());
-
+*/
+// ###[IF]node=1;rm=1L;
+let IS_PIPED = !process.stdin.isTTY;
 
 // comment-directive options that are flags
 const CLI_FLAGS = {
@@ -84,7 +92,10 @@ const CLI_OPTS = {
 } as const;
 
 
-const COLOR_SPACE = getColorSpace(undefined, std?.getenviron?.(), undefined, os.isatty(std.out.fileno()));
+// ###[IF]node=1;rm=line;
+const COLOR_SPACE = getColorSpace();
+// ###[IF]node=1;un=comment;
+// const COLOR_SPACE = getColorSpace(undefined, std?.getenviron?.(), undefined, os.isatty(std.out.fileno()));
 
 // ANSI cli color stainer
 // @NOTE: quickjs requires use of std.getenviron to get ENV vars needed for colorSpace
@@ -99,7 +110,11 @@ const stain = createStain({colorSpace: COLOR_SPACE});
  */
 const ensureDirSync = (filePath: string, verbose = false) => {
   verbose && console.log(`[INFO] ensureDirSync: ${filePath}`);
-
+  // ###[IF]node=1;rm=2L;
+  if (fs.existsSync(path.dirname(filePath))) { return; }
+  fs.mkdirSync(path.dirname(filePath), {recursive: true});
+  // ###[IF]node=1;un=comment;
+  /*
   if (filePath.includes('..')) {
     verbose && console.log('[INFO] ensureDirSync:skip: relative path');
     return;
@@ -126,7 +141,7 @@ const ensureDirSync = (filePath: string, verbose = false) => {
       throw new Error(`Failed to create directory '${ipath}': ${std.strerror(-ret)}`);
     }
   }
-
+  */
 };
 
 
@@ -142,41 +157,51 @@ const cli = async ({ctx, options, directives}: Args): Promise<boolean> => {
     let content: string | null = null;
     if (IS_PIPED) {
       content = '';
-
+      // ###[IF]node=1;rm=1L;
+      for await (const chunk of process.stdin) { content += chunk; }
+      // ###[IF]node=1;un=comment;
+      /*
       // @ts-expect-error 'in' is a resvered key so can't defined in d.ts
       for await (const chunk of std.in.readAsString()) { content += chunk; }
-
+      */
     }
 
     if (!input && !content) {
-      std.err.puts(`${stain.red.bold('[ERRO]')} no input file argument or piped stdin\n`);
-      std.err.puts(`     > for usage information: '${getMeta().name} --help'\n`);
+      process.stderr.write(`${stain.red.bold('[ERRO]')} no input file argument or piped stdin\n`);
+      process.stderr.write(`     > for usage information: '${getMeta().name} --help'\n`);
       return false;
     }
 
     // check if target exists
     if (input && !content) {
-      const [stat, statErr] = os.stat(input);
-      if (statErr !== 0) {
-        std.err.puts(`${stain.red.bold('[ERRO]')} cannot access input file: '${input}'\n`);
-        ctx.verbose && std.err.puts(stain.red.bold('[ERRO:statErr] ') + std.strerror(-statErr));
+      // ###[IF]node=1;un=comment;
+      // const [stat, statErr] = os.stat(input);
+      // ###[IF]node=1;sed=/!fs.existsSync(input)/statErr !== 0/;
+      if (!fs.existsSync(input)) {
+        process.stderr.write(`${stain.red.bold('[ERRO]')} cannot access input file: '${input}'\n`);
+        // ###[IF]node=1;un=comment;
+        // ctx.verbose && process.stderr.write(stain.red.bold('[ERRO:statErr] ') + std.strerror(-statErr));
         return false;
       }
-      if ((stat.mode & os.S_IFMT) !== os.S_IFREG) {
-        std.err.puts(`${stain.red.bold('[ERRO]')} Input path '${input}' is not a regular file\n`);
+      // ###[IF]node=1;sed=/!fs.statSync(input)?.isFile()/(stat.mode & os.S_IFMT) !== os.S_IFREG/;
+      if (!fs.statSync(input)?.isFile()) {
+        process.stderr.write(`${stain.red.bold('[ERRO]')} Input path '${input}' is not a regular file\n`);
         return false;
       }
 
       // read file content
-      content = std.loadFile(input, {binary: false}) as string | null;
+      // ###[IF]node=1;rm=1L;
+      content = fs.readFileSync(input, 'utf-8');
+      // ###[IF]node=1;un=comment;
+      // content = std.loadFile(input, {binary: false}) as string | null;
       if (typeof content !== 'string') {
-        std.err.puts(`${stain.red.bold('[ERRO]')} Failed to read file "${input}"`);
+        process.stderr.write(`${stain.red.bold('[ERRO]')} Failed to read file "${input}"`);
         return false;
       }
     }
 
     if (typeof content !== 'string') {
-      std.err.puts(`${stain.red.bold('[ERRO]')} Failed to read/parse input... should never happen`);
+      process.stderr.write(`${stain.red.bold('[ERRO]')} Failed to read/parse input... should never happen`);
       return false;
     }
 
@@ -193,14 +218,15 @@ const cli = async ({ctx, options, directives}: Args): Promise<boolean> => {
 
     if (!output) {
       // output to stdout
-      std.out.puts(result);
+      // ###[IF]node=1;sed=/process.stdout.write/std.out.puts/;
+      process.stdout.write(result);
       // console.log(result);
       return true;
     }
 
     // ensures no foot is blown off; otherwise trust the output is true
     if (input && (input === output) && !overwrite) {
-      std.err.puts(`${stain.red.bold('[ERRO]')} Need to use ${stain.red.bold('--overwrite')}`
+      process.stderr.write(`${stain.red.bold('[ERRO]')} Need to use ${stain.red.bold('--overwrite')}`
                            + ` to overwrite the input (${stain.red.bold.underline('!DANGER-ZONE!')})`);
       return false;
     }
@@ -209,23 +235,24 @@ const cli = async ({ctx, options, directives}: Args): Promise<boolean> => {
     try {
       ensureDirSync(output, verbose);
       verbose && console.log(`[INFO] writing to: ${output}`);
-      std.writeFile(output, result);
+      // ###[IF]node=1;sed=/fs.writeFileSync/std.writeFile/;
+      fs.writeFileSync(output, result);
       verbose && console.log(`[INFO] wrote to  : ${output}`);
       return true;
     } catch (err) {
-      std.err.puts(`${stain.red.bold('[ERRO:WRITE]')} Failed to write to "${output}": `
+      process.stderr.write(`${stain.red.bold('[ERRO:WRITE]')} Failed to write to "${output}": `
                     + (((err instanceof Error) ? err.message : null) ?? 'unknown error'));
       ctx.verbose
-        && std.err.puts('[STACK:TRACE]\n' + ((err as any)?.stack ?? 'no stack trace available'));
+        && process.stderr.write('[STACK:TRACE]\n' + ((err as any)?.stack ?? 'no stack trace available'));
       return false;
     }
 
   } catch (err) {
     const errMsg = stain.red.bold('[ERRO:CATCH] ')
       + (((err instanceof Error) ? err.message : null) ?? 'unknown error');
-    std.err.puts(errMsg);
+    process.stderr.write(errMsg);
     ctx.verbose
-       && std.err.puts('[STACK:TRACE]\n' + ((err as any)?.stack ?? 'no stack trace available'));
+       && process.stderr.write('[STACK:TRACE]\n' + ((err as any)?.stack ?? 'no stack trace available'));
     return false;
   }
 };
@@ -328,7 +355,8 @@ const parseArgs = async (): Promise<boolean> => {
   }
 
   if (ctx.version) {
-    std.out.puts(getMeta().version);
+    // ###[IF]node=1;sed=/process.stdout.write/std.out.puts/;
+    process.stdout.write(getMeta().version);
     return true;
   }
 
@@ -383,12 +411,17 @@ const parseArgs = async (): Promise<boolean> => {
   }
 
   iargs.ctx.input = eofInput ?? iargs.ctx.input ?? target ?? null;
-
+  // ###[IF]node=1;rm=1L;
+  iargs.ctx.input = iargs.ctx.input ? path.resolve(path.normalize(iargs.ctx.input)) : iargs.ctx.input;
+  // ###[IF]node=1;rm=1L;
+  iargs.ctx.output = iargs.ctx.output ? path.resolve(path.normalize(iargs.ctx.output)) : iargs.ctx.output;
+  // ###[IF]node=1;un=comment;
+  /*
   const [ipath, ierr] = iargs.ctx.input ? os.realpath(iargs.ctx.input) : [iargs.ctx.input, null];
   iargs.ctx.input = !ierr && ipath ? ipath : iargs.ctx.input;
   const [opath, oerr] = iargs.ctx.output ? os.realpath(iargs.ctx.output) : [iargs.ctx.output, null];
   iargs.ctx.output = !oerr && opath ? opath : iargs.ctx.output;
-
+  */
 
   // handle 'auto' lang or default to js
   if (lang === 'auto') {
@@ -403,7 +436,7 @@ const parseArgs = async (): Promise<boolean> => {
   const lext = extensions[lang as 'js'] as CommentRegexOption;
   if (!lext) {
     const sp = '\n       ';
-    std.err.puts(`${stain.red.bold('[ERRO]')} bad '--lang' cli/arg of: "${lang}"`
+    process.stderr.write(`${stain.red.bold('[ERRO]')} bad '--lang' cli/arg of: "${lang}"`
     + `  --->  must be one of the following:\n${sp}${Object.keys(extensions)
       .sort()
       .reduce((a, k, i) => ((a[Math.floor(i / 10)] ??= []).push(k), a), [] as string[][])
@@ -438,12 +471,14 @@ ${tt('OUTPUT')}    : ${stain.green(iargs.ctx.output ?? 'stdout')}`);
 const run = async () => {
   try {
     const isOk = await parseArgs();
-    std.exit(isOk ? 0 : 1);
+    // ###[IF]node=1;sed=/process/std/;
+    process.exit(isOk ? 0 : 1);
   } catch (err) {
     const errMsg = '[FATAL][commentDirective:CLI] '
       + (((err instanceof Error) ? err.message : null) ?? 'unknown error');
-    std.err.puts(errMsg + '\n');
-    std.exit(1);
+    process.stderr.write(errMsg + '\n');
+    // ###[IF]node=1;sed=/process/std/;
+    process.exit(1);
   }
 };
 run();
