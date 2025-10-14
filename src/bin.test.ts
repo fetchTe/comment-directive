@@ -174,6 +174,7 @@ const runTestType = (binTest: string[]) => {
       });
     });
 
+
     describe('argument validation', () => {
       test('fails when missing input', () => {
         const res = cli([], {}, false);
@@ -189,6 +190,13 @@ const runTestType = (binTest: string[]) => {
         expect(res.stderr).toContain(`cannot access input file: '${missing}'`);
       });
 
+      test('fails when input file is missing - nested dir', () => {
+        const noop = '/tmp/tmp/tmp/yolojolo.147852369';
+        const res = cli(['--prod=1', '--input', noop]);
+        expect(res.ok).toBe(false);
+        expect(res.stderr).toInclude(`cannot access input file: '${noop}'`);
+      });
+
       test('fails when input path is not a regular file', () => {
         const res = cli(['--input', DIRNAME], {}, false);
         expect(res.ok).toBe(false);
@@ -200,11 +208,13 @@ const runTestType = (binTest: string[]) => {
         const fixture = writeFixture(tempDir);
         const res = cli(['--lang', 'invalid', '--input', fixture], {}, false);
         expect(res.ok).toBe(false);
-        expect(res.stderr).toContain('bad --lang option key of: "invalid"');
+        expect(res.stderr).toContain(`bad '--lang' cli/arg of: "invalid"`);
       });
     });
 
+
     describe('processing behavior', () => {
+
       test('processes directive flags using input file and stdout output', () => {
         const tempDir = registerDir(createTempDir('stdout'));
         const fixture = writeFixture(tempDir);
@@ -277,6 +287,42 @@ const runTestType = (binTest: string[]) => {
         expect(res.stdout).toBe('');
         expect(readFile(fixture).trim()).toBe(EXPECTED_PROD);
       });
+
+
+      test('should handle lang argument and set lang', () => {
+        const tempDir = registerDir(createTempDir('stdout'));
+        const fixture = writeFixture(tempDir, {
+          filename: 'example.yolo',
+          content: `
+#!/bin/sh
+
+# ###[IF]prod=1;rm=comment
+# remove me!
+echo "test"`,
+        });
+        const res = cli(['--prod=1', '--input', fixture, '--lang=sh']);
+        expect(res.ok).toBe(true);
+        expect(res.stdout).toInclude('echo "test"');
+        expect(res.stdout).not.toInclude('remove me!');
+      });
+
+      test('should auto detect lang', () => {
+        const tempDir = registerDir(createTempDir('stdout'));
+        const fixture = writeFixture(tempDir, {
+          filename: 'example.sh',
+          content: `
+#!/bin/sh
+
+# ###[IF]prod=1;rm=comment
+# remove me!
+echo "test"`,
+        });
+        const res = cli(['--prod=1', '--input', fixture]);
+        expect(res.ok).toBe(true);
+        expect(res.stdout).toInclude('echo "test"');
+        expect(res.stdout).not.toInclude('remove me!');
+      });
+
 
     });
   });
