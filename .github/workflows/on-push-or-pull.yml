@@ -42,6 +42,6 @@ jobs:
       - name: make::install
         run :  make install
 
-      # the 'make all' target does it all: clean, setup, build, lint, test, aok (the entire jamboree)
-      - name: make::all
-        run :  make all
+      # the 'make release' target does it release: clean, setup, build, lint, test, aok (the entire jamboree)
+      - name: make::release
+        run :  make release
