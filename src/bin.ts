@@ -1,6 +1,8 @@
 /**                                                                       @about
-@desc: bin for both quickjs and npm bin; uses itself to build quickjs compliant
-       version of comment-directive which is used to build the executables
+@desc: bin for both quickjs executable and npm bin; uses itself to build quickjs
+       compliant version of comment-directive which is used to build the executable
+@cmd : make build && make build_bin_quickjs
+@NOTE: OS specific builds handled via: .github/workflows/on-release.yml
 ***                                                                           */
 // ###[IF]node=1;sed=/process.stderr.write/std.err.puts/g;
 /* eslint-disable @stylistic/max-len */
@@ -100,6 +102,13 @@ console.log('COLOR_SPACE: ', COLOR_SPACE);
 // @NOTE: quickjs requires use of std.getenviron to get ENV vars needed for colorSpace
 const stain = createStain({colorSpace: COLOR_SPACE});
 
+
+/**
+ * ensures the dir exists otherwise it creates it
+ * @param  {string} filePath
+ * @param  {boolean} [verbose=false]
+ * @return {void} - invoke within a try/catch for error propagation
+ */
 const ensureDirSync = (filePath: string, verbose = false) => {
   verbose && console.log(`[INFO] ensureDirSync: ${filePath}`);
   // ###[IF]node=1;rm=2L;
@@ -108,13 +117,13 @@ const ensureDirSync = (filePath: string, verbose = false) => {
   // ###[IF]node=1;un=comment;
   /*
   if (filePath.includes('..')) {
-    verbose && console.log(`[INFO] ensureDirSync:skip: relative path`);
+    verbose && console.log('[INFO] ensureDirSync:skip: relative path');
     return;
   }
   const lastSlashIndex = filePath.lastIndexOf('/');
   // ignore root paths like '/file.js'
   if (lastSlashIndex < 1) {
-    verbose && console.log(`[INFO] ensureDirSync:skip: root path`);
+    verbose && console.log('[INFO] ensureDirSync:skip: root path');
     return;
   }
   // pretty rudimentary but i aint dinkin around with all the edge cases (cough windows)
@@ -129,7 +138,7 @@ const ensureDirSync = (filePath: string, verbose = false) => {
     // attempt to create the directory - returns a negative errno on failure
     const ret = os.mkdir(ipath, 0o777);
     if (ret < 0 && ret !== -std.Error.EEXIST) {
-      verbose && std.err.puts(`[ERRO] ensureDirSync: ${ret}\n`);
+      verbose && std.err.puts(`${stain.red.bold('[ERRO]')} ensureDirSync: ${ret}\n`);
       throw new Error(`Failed to create directory '${ipath}': ${std.strerror(-ret)}`);
     }
   }
@@ -137,7 +146,12 @@ const ensureDirSync = (filePath: string, verbose = false) => {
 };
 
 
-const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
+/**
+ * runs the core cli workflow to read input, apply comment directives, and write output
+ * @param  {Args} - {ctx, options, directives}
+ * @return {Promise<boolean>}
+ */
+const cli = async ({ctx, options, directives}: Args): Promise<boolean> => {
   try {
     const {banner, input, overwrite, dry, verbose} = ctx;
     const output = ctx.output ? ctx.output : (overwrite ? input : null);
@@ -154,7 +168,7 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
     }
 
     if (!input && !content) {
-      process.stderr.write('[ERRO] no input file argument or piped stdin\n');
+      process.stderr.write(`${stain.red.bold('[ERRO]')} no input file argument or piped stdin\n`);
       process.stderr.write(`     > for usage information: '${getMeta().name} --help'\n`);
       return false;
     }
@@ -165,14 +179,14 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
       // const [stat, statErr] = os.stat(input);
       // ###[IF]node=1;sed=/!fs.existsSync(input)/statErr !== 0/;
       if (!fs.existsSync(input)) {
-        process.stderr.write(`[ERRO] cannot access input file: '${input}'\n`);
+        process.stderr.write(`${stain.red.bold('[ERRO]')} cannot access input file: '${input}'\n`);
         // ###[IF]node=1;un=comment;
-        // ctx.verbose && process.stderr.write('[ERRO:INFO] ' + std.strerror(-statErr));
+        // ctx.verbose && process.stderr.write(stain.red.bold('[ERRO:statErr] ') + std.strerror(-statErr));
         return false;
       }
       // ###[IF]node=1;sed=/!fs.statSync(input)?.isFile()/(stat.mode & os.S_IFMT) !== os.S_IFREG/;
       if (!fs.statSync(input)?.isFile()) {
-        process.stderr.write(`[ERRO] Input path '${input}' is not a regular file\n`);
+        process.stderr.write(`${stain.red.bold('[ERRO]')} Input path '${input}' is not a regular file\n`);
         return false;
       }
 
@@ -182,13 +196,13 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
       // ###[IF]node=1;un=comment;
       // content = std.loadFile(input, {binary: false}) as string | null;
       if (typeof content !== 'string') {
-        process.stderr.write(`[ERRO] Failed to read file "${input}"`);
+        process.stderr.write(`${stain.red.bold('[ERRO]')} Failed to read file "${input}"`);
         return false;
       }
     }
 
     if (typeof content !== 'string') {
-      process.stderr.write('[ERRO] Failed to read/parse input... should never happen');
+      process.stderr.write(`${stain.red.bold('[ERRO]')} Failed to read/parse input... should never happen`);
       return false;
     }
 
@@ -196,8 +210,9 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
     const result = (banner ? banner + '\n' : '') + commentDirective(content, directives, options);
 
     if (dry) {
-      console.log(`[DRY RUN] write to: ${output}`);
-      console.log('[DRY RUN] preview (first 300 chars):\n');
+      const dy = stain.yellow.bold('[DRY RUN]');
+      console.log(`${dy} write to: ${output}`);
+      console.log(`${dy} preview (first 300 chars):\n`);
       console.log(result.substring(0, 300) + (result.length > 300 ? '...' : '') + '\n');
       return true;
     }
@@ -212,7 +227,8 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
 
     // ensures no foot is blown off; otherwise trust the output is true
     if (input && (input === output) && !overwrite) {
-      process.stderr.write('[ERRO] Need to use --overwrite to overwrite the input (!DANGER-ZONE!)');
+      process.stderr.write(`${stain.red.bold('[ERRO]')} Need to use ${stain.red.bold('--overwrite')}`
+                           + ` to overwrite the input (${stain.red.bold.underline('!DANGER-ZONE!')})`);
       return false;
     }
 
@@ -225,7 +241,7 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
       verbose && console.log(`[INFO] wrote to  : ${output}`);
       return true;
     } catch (err) {
-      process.stderr.write(`[ERRO:WRITE] Failed to write to "${output}": `
+      process.stderr.write(`${stain.red.bold('[ERRO:WRITE]')} Failed to write to "${output}": `
                     + (((err instanceof Error) ? err.message : null) ?? 'unknown error'));
       ctx.verbose
         && process.stderr.write('[STACK:TRACE]\n' + ((err as any)?.stack ?? 'no stack trace available'));
@@ -233,7 +249,7 @@ const cli = async ({ctx, options, directives}: Struc): Promise<boolean> => {
     }
 
   } catch (err) {
-    const errMsg = '[ERRO:CATCH] '
+    const errMsg = stain.red.bold('[ERRO:CATCH] ')
       + (((err instanceof Error) ? err.message : null) ?? 'unknown error');
     process.stderr.write(errMsg);
     ctx.verbose
@@ -404,6 +420,10 @@ ${tt('OUTPUT')}    : ${stain.green(iargs.ctx.output ?? 'stdout')}`);
 };
 
 
+/**
+ * entry point that invokes argument parsing and exits the process with appropriate code
+ * @return {Promise<void>}
+ */
 const run = async () => {
   try {
     const isOk = await parseArgs();
