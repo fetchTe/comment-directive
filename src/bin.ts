@@ -96,7 +96,6 @@ const CLI_OPTS = {
 const COLOR_SPACE = getColorSpace();
 // ###[IF]node=1;un=comment;
 // const COLOR_SPACE = getColorSpace(undefined, std?.getenviron?.(), undefined, os.isatty(std.out.fileno()));
-console.log('COLOR_SPACE: ', COLOR_SPACE);
 
 // ANSI cli color stainer
 // @NOTE: quickjs requires use of std.getenviron to get ENV vars needed for colorSpace
@@ -259,8 +258,6 @@ const cli = async ({ctx, options, directives}: Args): Promise<boolean> => {
 };
 
 
-const parseArgs = () => {
-  const reap = cliReapLoose();
 /**
  * prints the formatted help and usage message to stdout
  * @return {void}
@@ -321,6 +318,13 @@ ${toTitle('EXAMPLES')}
 };
 
 
+/**
+ * parses command line args and configures execution context
+ * @return {Promise<boolean>} true on success, false on invalid args or downstream failure
+ */
+const parseArgs = async (): Promise<boolean> => {
+  const reap = cliReap();
+  // argv context
   const ctx: Options = {
     help: !!reap.flag(['h', 'help']),
     verbose: !!reap.flag(['v', 'verbose']),
@@ -375,16 +379,8 @@ ${toTitle('EXAMPLES')}
       : castBooly(opt) ?? val;
   }
 
-  // get custom lang and err out if no match
-  const lang = (reap.opt(['l', 'lang']) ?? 'js') as 'js';
-  const lext = extensions[lang] as CommentRegexOption;
-  if (!lext) {
-    process.stderr.write(`[ERRO] bad --lang option key of: "${lang}"`
-    + `\n     > all/langs: ${Object.keys(extensions).join(', ')}`);
-    return false;
-  }
-  istruc.options.multi = lext.multi;
-  istruc.options.single = lext.single ?? istruc.options.single;
+  // snag lang, but we don't process till after input is set to auto set lang
+  let lang = (reap.opt(['l', 'lang']) ?? 'auto');
 
   // loop/check for other possible comment-directive options
   for (const key of toKeys(DEFAULT_OPTIONS)) {
@@ -427,6 +423,27 @@ ${toTitle('EXAMPLES')}
   iargs.ctx.output = !oerr && opath ? opath : iargs.ctx.output;
   */
 
+  // handle 'auto' lang or default to js
+  if (lang === 'auto') {
+    lang = IS_PIPED || !iargs.ctx.input
+      ? 'js'
+      : iargs.ctx.input.split('.').pop() ?? 'js';
+    // fallback to 'js'
+    lang = extensions[lang as 'js'] ? lang : 'js';
+  }
+
+  // get custom lang or err out if no match
+  const lext = extensions[lang as 'js'] as CommentRegexOption;
+  if (!lext) {
+    const sp = '\n       ';
+    process.stderr.write(`${stain.red.bold('[ERRO]')} bad '--lang' cli/arg of: "${lang}"`
+    + `  --->  must be one of the following:\n${sp}${Object.keys(extensions)
+      .sort()
+      .reduce((a, k, i) => ((a[Math.floor(i / 10)] ??= []).push(k), a), [] as string[][])
+      .map(v => v.join(', '))
+      .join(sp)}\n`);
+    return false;
+  }
   iargs.options.multi = lext.multi;
   iargs.options.single = lext.single ?? iargs.options.single;
 
