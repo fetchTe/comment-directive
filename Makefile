@@ -24,11 +24,11 @@ all: help
 # source dir
 SRC = $(CURDIR)/src
 # entrypoint
-ENT = $(SRC)/index.ts $(SRC)/lang.ts $(SRC)/bin.ts
+ENT = $(SRC)/index.ts $(SRC)/lang.ts $(SRC)/cli.ts
 # build/output dir
 DST = $(CURDIR)/dist
 # test(s) (if not defined, recursive test search: bun.sh/docs/cli/test#run-tests)
-TES = $(SRC)/index.test.ts $(SRC)/index.keep.test.ts $(SRC)/index.pad.test.ts $(SRC)/README.test.ts $(SRC)/bin.test.ts
+TES = $(SRC)/index.test.ts $(SRC)/index.keep.test.ts $(SRC)/index.pad.test.ts $(SRC)/README.test.ts $(SRC)/cli.test.ts
 # node/binaries (tsc, eslint)
 NOM = $(CURDIR)/node_modules
 BIN = $(NOM)/.bin
@@ -168,9 +168,9 @@ release: ## clean, setup, build, lint, test, aok (everything but the kitchen sin
 	@$(CMD_MK) "$(DST)" || { $(MAKE) MSG="failed to create $(DST)" _erro; exit 1; }
 	@# buid in prod with IS_TEST (skip min builds)
 	@$(MAKE) ENV="PROD" TEST="1" MIN="0" _build_code_factory || { $(MAKE) MSG="build_code target failed... abort" _erro; exit 1; }
-	@$(MAKE) build_bin
+	@$(MAKE) build_cli
 	@# need to build quickjs executable to test against
-	@$(MAKE) build_bin_quickjs
+	@$(MAKE) build_cli_quickjs
 	@# lint es/ts (must run indv in order to exit properly)
 	@$(MAKE) MSG="release:lint" SYM="--" COLOR="1;36" _init
 	@$(MAKE) BAIL="1" lint_eslint || { $(MAKE) MSG="target lint_eslint failed..." _erro; exit 1; }
@@ -184,7 +184,7 @@ release: ## clean, setup, build, lint, test, aok (everything but the kitchen sin
 	@$(CMD_RM) "$(DST)" || true
 	@$(CMD_MK) "$(DST)" || { $(MAKE) MSG="failed to create $(DST)" _erro; exit 1; }
 	@$(MAKE) ENV="PROD" TEST="0" MIN="$(MIN)" _build_code_factory
-	@$(MAKE) build_bin
+	@$(MAKE) build_cli
 	@$(MAKE) MSG="release" LEN="-1" _done
 
 
@@ -199,25 +199,25 @@ build: ## builds the .{js,d.ts} (skips: lint, test, and .min.* build)
 	@$(MAKE) MIN="0" CJS="0" _build_code_factory
 	@$(MAKE) MSG="build ENV=$(ENV) -> IS_PROD=$(IS_PROD)" LEN="60" _done
 
-.PHONY: build_bin
-build_bin:  ## builds node bin output
-	@$(MAKE) MSG="build_bin" LEN="-1" _init
+.PHONY: build_cli
+build_cli:  ## builds node cli/bin output
+	@$(MAKE) MSG="build_cli" LEN="-1" _init
 	@# force shebang banner comment ./src
-	@$(MAKE) ENT="$(SRC)/bin.ts" \
+	@$(MAKE) ENT="$(SRC)/cli.ts" \
 		BFLG_SHR="$(BFLG_SHR) --banner='#!/usr/bin/env node'" \
 		MIN="0" CJS="0" _bun_code_factory
-	@$(MAKE) MSG="build_bin" LEN="-1" _done
+	@$(MAKE) MSG="build_cli" LEN="-1" _done
 
-.PHONY: build_bin_quickjs
-build_bin_quickjs:  ## compiles quickjs binary/executable
-	@$(MAKE) MSG="build_bin_quickjs" LEN="-1" _init
-	@$(BIN_BUN) run $(SRC)/bin.ts --escape  --node=1 \
-		--input=$(SRC)/bin.ts \
-		--output=$(SRC)/bin.quickjs.ts \
+.PHONY: build_cli_quickjs
+build_cli_quickjs:  ## compiles cli quickjs binary/executable
+	@$(MAKE) MSG="build_cli_quickjs" LEN="-1" _init
+	@$(BIN_BUN) run $(SRC)/cli.ts --escape  --node=1 \
+		--input=$(SRC)/cli.ts \
+		--output=$(SRC)/cli.quickjs.ts \
 		--banner="// !! AUTO GENERATED <-> DO NOT EDIT DIRECTLY !!"
-	@$(MAKE) ENT="$(SRC)/bin.quickjs.ts" MIN="0" CJS="0" _bun_code_factory
-	@$(BIN_QJS) --std --module --compile "$(DST)/bin.quickjs.js" --out $(DST)/comment-directive
-	@$(MAKE) MSG="build_bin_quickjs" LEN="-1" _done
+	@$(MAKE) ENT="$(SRC)/cli.quickjs.ts" MIN="0" CJS="0" _bun_code_factory
+	@$(BIN_QJS) --std --module --compile "$(DST)/cli.quickjs.js" --out $(DST)/comment-directive
+	@$(MAKE) MSG="build_cli_quickjs" LEN="-1" _done
 
 .PHONY: build_cjs
 build_cjs:  ## builds the .cjs export
@@ -288,10 +288,10 @@ _bun_code_factory: # private bun code build (wrapper) factory
 
 
 #------------------------------------------------------------------------------#
-# @id::bin
+# @id::cli
 #------------------------------------------------------------------------------#
-.PHONY: _bin_install_factory
-_bin_install_factory: # private bin uninstall helper
+.PHONY: _cli_install_factory
+_cli_install_factory: # private cli/bin uninstall helper
 	@PKG=$$(npm pkg get name | tr -d '"'); \
 	[ "$${PKG}" = "" ] && exit 1; \
 	PACK=$$(npm pack | tail -n 1); \
@@ -301,27 +301,27 @@ _bin_install_factory: # private bin uninstall helper
 	rm -v "$${PACK}"; \
 	exit $$RESULT
 
-.PHONY: _bin_uninstall_factory
-_bin_uninstall_factory: # private bin uninstall helper
+.PHONY: _cli_uninstall_factory
+_cli_uninstall_factory: # private cli uninstall helper
 	@PKG="$$(npm pkg get name | tr -d '"')"; \
 	[ "$${PKG}" = "" ] && exit 1; \
 	printf "\n\e[1;33mnpm uninstall -g %s\033[0m\n" "$${PKG}"; \
 	npm uninstall -g "$${PKG}"; \
 	exit $$?
 
-.PHONY: bin
-bin:  ## builds, packs, and installs globally via npm (cli shebang included)
-	@$(MAKE) MSG="bin" LEN="-1" _init
-	@$(MAKE) build_bin
-	@$(MAKE) _bin_install_factory || { $(MAKE) MSG="bin target failed... abort" _erro; exit 1; }
-	@$(MAKE) MSG="bin" LEN="-1" _done
+.PHONY: cli
+cli:  ## builds, packs, and installs globally via npm (cli shebang included)
+	@$(MAKE) MSG="cli" LEN="-1" _init
+	@$(MAKE) build_cli
+	@$(MAKE) _cli_install_factory || { $(MAKE) MSG="cli target failed... abort" _erro; exit 1; }
+	@$(MAKE) MSG="cli" LEN="-1" _done
 	@printf "\n  %s\n" "$$(npm pkg get name | tr -d '"')"
 
-.PHONY: bin_uninstall
-bin_uninstall:  ## uninstalls the globally installed package (reverts above 'make bin')
-	@$(MAKE) MSG="bin_uninstall" LEN="-1" _init
-	@$(MAKE) _bin_uninstall_factory || { $(MAKE) MSG="bin_uninstall target failed... abort" _erro; exit 1; }
-	@$(MAKE) MSG="bin_uninstall" LEN="-1" _done
+.PHONY: cli_uninstall
+cli_uninstall:  ## uninstalls the globally installed package (reverts above 'make cli')
+	@$(MAKE) MSG="cli_uninstall" LEN="-1" _init
+	@$(MAKE) _cli_uninstall_factory || { $(MAKE) MSG="cli_uninstall target failed... abort" _erro; exit 1; }
+	@$(MAKE) MSG="cli_uninstall" LEN="-1" _done
 
 #------------------------------------------------------------------------------#
 # @id::install/update
