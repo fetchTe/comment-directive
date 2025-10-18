@@ -164,7 +164,7 @@ declare module 'qjs:std' {
     export function unsetenv(name: string): void;
 
     // Return an object containing the environment variables as key-value pairs.
-    export function getenviron(): void;
+    export function getenviron(): Record<string, string>;
 
     /** Options object for urlGet
      * @param binary Boolean (default = false). If true, the response is an ArrayBuffer instead of a string. When a string is returned, the data is assumed to be UTF-8 encoded.
