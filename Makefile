@@ -283,7 +283,7 @@ _bun_factory: # private bun factory
 
 .PHONY: _bun_code_factory
 _bun_code_factory: # private bun code build (wrapper) factory
-	@[ "$(_BIIF)" == "iife" ] && [ "$(_BIIF)" != "$(_BFMT)" ] && exit 0 || true
+	@[ "$(_BIIF)" = "iife" ] && [ "$(_BIIF)" != "$(_BFMT)" ] && exit 0 || true
 	@$(MAKE) _BPOS="build" _BOUT="--format $(_BFMT) --entry-naming \"[dir]/[name].$(_BEXE)\" --entrypoints $(ENT) --outdir \"$(DST)\"" _bun_factory
 
 
