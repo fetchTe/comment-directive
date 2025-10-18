@@ -3,7 +3,7 @@ name: on-release
 env:
   # release artifacts (adjust to fit your use; an empty string will disable)
   #  > tars filename: bun-make.v1.0.2.tar.xz
-  ARTIFACTS   : './dist/index.js,./dist/index.min.js,./dist/lang.js,/tmp/tars/*.tar*,./dist/comment-directive-*'
+  ARTIFACTS   : './dist/index.js,./dist/index.min.js,./dist/lang.js,/tmp/tars/*.tar*,./build/comment-directive-*'
   # set to '0' to disable commit links
   LINK_COMMITS: 1
   # set to '0' to consider all tags (otherwise tags must start with 'v')
@@ -26,13 +26,14 @@ jobs:
   #----------------------------------------------------------------------------#
   #@id::build cli for executable builds                                        #
   #----------------------------------------------------------------------------#
-  build-cli:
+  cli-build:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: bun::preheat-cache
         if: env.USE_CACHE == 1
         uses: actions/cache@v4
@@ -41,6 +42,7 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
+
       - name: bun::preheat-oven
         uses: oven-sh/setup-bun@v2
         with:
@@ -69,13 +71,14 @@ jobs:
 
       - name: verify build output
         run: |
+          set -eu
           ls -la dist/
           test -f dist/cli.quickjs.js || (echo "dist/cli.quickjs.js not found!" && exit 1)
 
       - name: upload built project
         uses: actions/upload-artifact@v4
         with:
-          name: built-project
+          name: cli-build
           path: dist/
           retention-days: 1
 
@@ -84,54 +87,66 @@ jobs:
   #@id::linux executable                                                       #
   #----------------------------------------------------------------------------#
   linux:
-    needs: build-cli
+    needs: cli-build
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         arch: [aarch64, riscv64, x86, x86_64]
     steps:
-      - uses: actions/checkout@v4
+      - name: checkout
+        uses: actions/checkout@v4
         with:
           repository: 'quickjs-ng/quickjs'
           path: 'quickjs-ng'
-      - name: download built project
+
+      - name: download-artifact::cli-build
         uses: actions/download-artifact@v4
         with:
-          name: built-project
+          name: cli-build
           path: dist/
-      - uses: jirutka/setup-alpine@v1
+
+      - name: setup
+        uses: jirutka/setup-alpine@v1
         with:
           arch: ${{matrix.arch}}
-          packages: 'build-base make cmake'
-      - name: build quickjs
+          packages: 'build-base make cmake file'
+
+      - name: build::quickjs
         shell: alpine.sh {0}
         run: |
+          set -eu
           cd quickjs-ng
-          mkdir build
+          mkdir -p build
           cd build
-          cmake -DQJS_BUILD_CLI_STATIC=ON ..
+          cmake -DCMAKE_BUILD_TYPE=Release -DQJS_BUILD_CLI_STATIC=ON ..
           cd ..
           cmake --build build --target qjs_exe -j$(getconf _NPROCESSORS_ONLN)
 
-      - name: compile to executable
+      - name: compile::executable
         shell: alpine.sh {0}
         run: |
+          set -eu
           cd quickjs-ng
           ./build/qjs -c ../dist/cli.quickjs.js -o ../dist/comment-directive-linux-${{matrix.arch}}
           chmod +x ../dist/comment-directive-linux-${{matrix.arch}}
+
       - name: check
         shell: alpine.sh {0}
         run: |
+          set -eu
           file dist/comment-directive-linux-${{matrix.arch}}
-      - name: test executable
+
+      - name: test::executable
         shell: alpine.sh {0}
         run: |
+          set -eu
           ./dist/comment-directive-linux-${{matrix.arch}} --version
 
-      - name: functionality test
+      - name: functionality::test
         shell: alpine.sh {0}
         run: |
+          set -eu
           # Create temp file with test content
           cat > tmp.txt << 'EOF'
           // ###[IF]test=1;sed=/test/a_ok/;
@@ -186,41 +201,51 @@ jobs:
   #@id::macos executable (intel/silicon)                                       #
   #----------------------------------------------------------------------------#
   macos:
-    needs: build-cli
+    needs: cli-build
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: checkout
+        uses: actions/checkout@v4
         with:
           repository: 'quickjs-ng/quickjs'
           path: 'quickjs-ng'
-      - name: download built project
+
+      - name: download-artifact::cli-build
         uses: actions/download-artifact@v4
         with:
-          name: built-project
+          name: cli-build
           path: dist/
-      - name: build quickjs
+
+      - name: build::quickjs
         run: |
+          set -eu
           cd quickjs-ng
           mkdir build
           cd build
-          cmake -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" ..
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" ..
           make -j$(getconf _NPROCESSORS_ONLN)
 
-      - name: compile to executable
+      - name: compile::executable
         run: |
+          set -eu
           cd quickjs-ng
           ./build/qjs -c ../dist/cli.quickjs.js -o ../dist/comment-directive-darwin
           chmod +x ../dist/comment-directive-darwin
+
       - name: check
         run: |
+          set -eu
           lipo -info dist/comment-directive-darwin
           file dist/comment-directive-darwin
-      - name: test executable
+
+      - name: test::executable
         run: |
+          set -eu
           ./dist/comment-directive-darwin --version
 
-      - name: functionality test
+      - name: functionality::test
         run: |
+          set -eu
           # Create temp file with test content
           cat > tmp.txt << 'EOF'
           // ###[IF]test=1;sed=/test/a_ok/;
@@ -265,7 +290,7 @@ jobs:
   #@id::windows executable                                                     #
   #----------------------------------------------------------------------------#
   windows:
-    needs: build-cli
+    needs: cli-build
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -275,17 +300,19 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - name: checkout
+        uses: actions/checkout@v4
         with:
           repository: 'quickjs-ng/quickjs'
           path: 'quickjs-ng'
-      - name: download built project
+
+      - name: download::cli-build
         uses: actions/download-artifact@v4
         with:
-          name: built-project
+          name: cli-build
           path: dist/
 
-      - name: Setup MSYS2
+      - name: setup::MSYS2
         uses: msys2/setup-msys2@v2
         with:
           msystem: ${{ matrix.arch == 'x86' && 'mingw32' || 'ucrt64' }}
@@ -296,25 +323,33 @@ jobs:
             cmake:p
             ninja:p
             toolchain:p
-      - name: build quickjs
+
+      - name: build::quickjs
         run: |
+          set -eu
           cd quickjs-ng
           make
 
-      - name: compile to executable
+      - name: compile::executable
         run: |
+          set -eu
           cd quickjs-ng
           ./build/qjs.exe -c ../dist/cli.quickjs.js -o ../dist/comment-directive-windows-${{matrix.arch}}.exe
+
       - name: check
         run: |
+          set -eu
           file dist/comment-directive-windows-${{matrix.arch}}.exe
           ldd quickjs-ng/build/qjs.exe || echo "ldd check skipped"
-      - name: test executable
+
+      - name: test::executable
         run: |
+          set -eu
           ./dist/comment-directive-windows-${{matrix.arch}}.exe --version
 
-      - name: functionality test
+      - name: functionality::test
         run: |
+          set -eu
           # Create temp file with test content
           cat > tmp.txt << 'EOF'
           // ###[IF]test=1;sed=/test/a_ok/;
@@ -369,6 +404,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: bun::preheat-cache
         if: env.USE_CACHE == 1
         uses: actions/cache@v4
@@ -377,6 +413,7 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
+
       - name: bun::preheat-oven
         uses: oven-sh/setup-bun@v2
         with:
@@ -385,8 +422,6 @@ jobs:
       # install deps & make all
       - name: make::install
         run: make install
-      - name: make::all
-        run: make all
 
       # download all built executables
       - name: download-artifact::qjs
@@ -405,9 +440,19 @@ jobs:
       # make release - need to specify local qjs to compile target in release
       - name: make::release
         run: BIN_QJS=build/qjs DEBUG=1 make release
+
+      # download all built executables
+      - name: download-artifact::comment-directive:executables
+        uses: actions/download-artifact@v4
+        with:
+          path: build
           merge-multiple: true
-      - name: list all assets
-        run: ls -la dist/
+
+      - name: verify::output
+        run: |
+          set -eu
+          ls -la dist/
+          test -f dist/index.js || (echo "dist/index.js not found!" && exit 1)
 
       - name: create::compressed archive
         env:
