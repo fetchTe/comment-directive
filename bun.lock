@@ -13,7 +13,7 @@
         "cli-reap": "1.1.0",
         "eslint": "9.29.0",
         "globables": "3.2.0",
-        "stain": "1.3.0",
+        "stain": "1.4.0",
         "typescript": "5.8.3",
         "typescript-eslint": "8.34.0",
       },
@@ -240,7 +240,7 @@
 
     "shebang-regex": ["shebang-regex@3.0.0", "", {}, "sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A=="],
 
-    "stain": ["stain@1.3.0", "", {}, "sha512-yhrOWkpamfB7nzAbOX5rFfzbLrhhv66S6Sb+VXZSDY9yWg+dTJXyZzSXVO6x/iNmdIKj/dBA9L8Qq/ABV2nO3g=="],
+    "stain": ["stain@1.4.0", "", {}, "sha512-KJuOd4xmTwRXwqo7w57Y/uzKW/wbskw8usWpJ+2kHXQ4cATjVXkMw6GsYW8LA7rzXRprFHY5+CJAY8iCRwDlAw=="],
 
     "strip-json-comments": ["strip-json-comments@3.1.1", "", {}, "sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig=="],
 
