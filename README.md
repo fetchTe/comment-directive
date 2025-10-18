@@ -3,6 +3,7 @@
 A brutally effective text preprocessor that uses comments as conditional directives. No need for separate `.template` files, no overly complicated DSL; just comments that do useful work.
 
 > Well-tested, isomorphic, dependency-free, slices and dices lines: ~300/µs, ~3,000/ms, and ~3,000,000/s;<br/>
+> Standalone [CLI](#cli) binary/executable (~2MiB; [linux/mac/windows](https://github.com/fetchTe/comment-directive/releases/latest));<br/>
 > But, as with anything [`RegExp`](https://en.wikipedia.org/wiki/Regular_expression), it's more like a well-oiled [ice sculpture](https://en.wikipedia.org/wiki/Ice_sculpture) chainsaw than a surgical blade
 
 
@@ -65,6 +66,66 @@ yarn add --dev comment-directive
 ```
 <br/>
 
+
+
+## CLI
+
+> **Install Via**:<br />
+> ╸ Package manager e.g: `npm install -g comment-directive`<br />
+> ╸ Snag the binary/executable in the release: [linux/mac/windows](https://github.com/fetchTe/comment-directive/releases/latest)<br />
+
+```julia
+# USAGE
+  comment-directive [options...] [--directive=<value>...] <input>
+
+# DIRECTIVE
+  --<key>=<value>  ┈ ┈ ┈  key-value flags (controls comment-directive conditional logic)
+  --[opt]=[value]  ┈ ┈ ┈  options for comment-directive; value-less flags == true
+                          (e.g: --keepDirective --loose --escape=false)
+
+# OPTION
+  -i, --input     <file>  Specify the input; overrides the positional argument;
+                          reads from stdin (piped) if no input positional/option defined
+  -o, --output    <file>  Specify the output; defaults to stdout
+  -a, --append     <str>  Append string atop output to indicate it's auto-generated
+  -l, --lang       <ext>  Set language syntax for comments (e.g: 'js', 'py', 'html')
+      --overwrite         Overwrite input if: no output or the same (DANGER_ZONE)
+
+  -n, --dry-run   ┈ ┈ ┈   Perform a dry run (without writing to a file) & print preview
+  -v, --verbose   ┈ ┈ ┈   Enable verbose logging for debugging
+  -h, --help    ┈ ┈ ┈ ┈   Display this help message and exit
+      --version   ┈ ┈ ┈   Display the version number and exit
+      --env     ┈ ┈ ┈ ┈   Print all parsed arguments, options, and directives, then exit;
+                          useful for debugging how the CLI interprets input/options
+
+# EXAMPLES
+  # process 'input.ts' with a comment directive of '--prod=1' with stdout output
+  comment-directive --prod=1 input.ts
+  # 'in.py' input to 'out.py' output with a mix of options/directives
+  comment-directive --lang=py --keepPadEmpty=false --isCmt=1 -o out.py in.py
+  # pipe content and redirect the processed output to a new file
+  cat input.md | comment-directive --lang=md --kool=1 > output.md
+```
+
+> Build cross-target/platform via: [`.github/workflows/on-release.yml`](https://github.com/fetchTe/comment-directive/master/.github/workflows/on-release.yml)<br />
+> Build locally via: `make build && make build_cli_quickjs`<br />
+>  ╸ Runs [`cli.ts`](https://github.com/fetchTe/comment-directive/master/src/cli.ts) through `comment-directive` itself to produce [`cli.quickjs.ts`](https://github.com/fetchTe/comment-directive/master/src/cli.quickjs.ts) (`qjs` compile target)<br />
+>  ╸ [QuickJS-ng](https://github.com/quickjs-ng/quickjs) then produces the executable; and some people say: _magic ain't real_<br />
+
+
+
+
+<!-- 
+
+<img width="auto" height="672" alt="usage" src="https://raw.githubusercontent.com/fetchTe/comment-directive/master/docs/cli.png" />
+<blockquote >
+<details>
+<summary><b>Code</b></summary>
+
+</details>
+</blockquote>
+ -->
+<br />
 
 
 ## API
@@ -358,7 +419,6 @@ const itsExponential = (fac = 2) => {
 ```
 > To remove the trailing space in `/* app-ended */ ` you could use: `/* app-ended *///@//#STOP;` <br/>
 > Or use a different delimiter like `^` to write: `/* app-ended */^@//#STOP;`
-
 
 #### ⎸`(shift|pop)=<value>/[<N>L][@<stop>]`
 
