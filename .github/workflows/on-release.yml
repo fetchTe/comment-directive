@@ -138,11 +138,32 @@ jobs:
             exit 1
           fi
 
-      - name: upload
+      - name: checksum
+        shell: alpine.sh {0}
+        run: |
+          set -eu
+          (cd dist && sha256sum comment-directive-linux-${{matrix.arch}}) | tee dist/comment-directive-linux-${{matrix.arch}}.sha256
+
+      - name: upload::executable
         uses: actions/upload-artifact@v4
         with:
           name: comment-directive-linux-${{matrix.arch}}
           path: dist/comment-directive-linux-${{matrix.arch}}
+
+      - name: upload::checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-directive-linux-${{matrix.arch}}.sha256
+          path: dist/comment-directive-linux-${{matrix.arch}}.sha256
+
+      # used in build-release
+      - name: upload::qjs
+        if: matrix.arch == 'x86_64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qjs
+          path: quickjs-ng/build/qjs
+
 
 
   #----------------------------------------------------------------------------#
@@ -206,11 +227,22 @@ jobs:
             exit 1
           fi
 
-      - name: upload
+      - name: checksum
+        run: |
+          set -eu
+          (cd dist && shasum -a 256 comment-directive-darwin) | tee dist/comment-directive-darwin.sha256
+
+      - name: upload::executable
         uses: actions/upload-artifact@v4
         with:
           name: comment-directive-darwin
           path: dist/comment-directive-darwin
+
+      - name: upload::checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-directive-darwin.sha256
+          path: dist/comment-directive-darwin.sha256
 
 
   #----------------------------------------------------------------------------#
@@ -289,11 +321,22 @@ jobs:
             exit 1
           fi
 
-      - name: upload
+      - name: checksum
+        run: |
+          set -eu
+          (cd dist && sha256sum comment-directive-windows-${{matrix.arch}}.exe) | tee dist/comment-directive-windows-${{matrix.arch}}.exe.sha256
+
+      - name: upload::executable
         uses: actions/upload-artifact@v4
         with:
           name: comment-directive-windows-${{matrix.arch}}
           path: dist/comment-directive-windows-${{matrix.arch}}.exe
+
+      - name: upload::checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-directive-windows-${{matrix.arch}}.exe.sha256
+          path: dist/comment-directive-windows-${{matrix.arch}}.exe.sha256
 
 
   #----------------------------------------------------------------------------##
