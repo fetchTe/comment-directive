@@ -386,7 +386,7 @@ jobs:
           CURRENT_TAG: ${{ github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          #!/bin/sh
+          set -eu
           NUK=$(printf '\033[0m')
           CYN=$(printf '\033[0;36m')
           repo=$(pwd)
@@ -397,9 +397,9 @@ jobs:
           fname="${dpath}${bname}.${CURRENT_TAG}"
           echo "${CYN}[FILE] ${fname}${NUK}"
           printf "${CYN}%s%*s${NUK}\n" "[${fname}.tar.gz]" 75 "" | tr " " "~"
-          tar --exclude='node_modules' -C "${repo}" -cvzf "${fname}".tar.gz .
+          tar --exclude='node_modules' -C "${repo}" -cvzf "${fname}.tar.gz" .
           printf "${CYN}%s%*s${NUK}\n" "[${fname}.tar.xz]" 75 "" | tr " " "~"
-          tar --exclude='node_modules' -C "${repo}" -cJf "${fname}".tar.xz .
+          tar --exclude='node_modules' -C "${repo}" -cJf "${fname}.tar.xz" .
 
       - name: generate::release-notes
         id: generate_notes_notes
@@ -407,11 +407,8 @@ jobs:
           CURRENT_TAG: ${{ github.ref_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          #!/bin/sh
+          set -eu
           git config --global --add safe.directory /github/workspace
-          # this suppress an error occurred when the repository is a complete one
-          git fetch --prune --unshallow || true
-          # its POSIXy
           NUK=$(printf '\033[0m')
           YEL=$(printf '\033[0;33m')
           CYN=$(printf '\033[0;36m')
@@ -436,17 +433,17 @@ jobs:
             grange="${gtag}..HEAD"
           fi
           if [ -n "${gtag}" ]; then
-            if [ "$LINK_COMMITS" = "1" ]; then
-              printf "## [\`%s\`](https://github.com/%s/tree/%s)\n\n" "${CURRENT_TAG}" "$GITHUB_REPOSITORY" "${CURRENT_TAG}" > /tmp/release.md
+            if [ "${LINK_COMMITS}" = "1" ]; then
+              printf "## [\`%s\`](https://github.com/%s/tree/%s)\n\n" "${CURRENT_TAG}" "${GITHUB_REPOSITORY}" "${CURRENT_TAG}" >/tmp/release.md
             else
-              printf "## \`%s\`\n\n" "${CURRENT_TAG}" > /tmp/release.md
+              printf "## \`%s\`\n\n" "${CURRENT_TAG}" >/tmp/release.md
             fi
           fi
           if [ "${grange}" != "0" ]; then
             if [ "${LINK_COMMITS}" = "1" ]; then
-              git log --oneline "${grange}" | awk -v repo="${GITHUB_REPOSITORY}" '{print "* [\`" substr($1, 1, 7) "\`](https://github.com/" repo "/commit/" substr($1, 1, 7) ") " substr($0, 9)}' >> /tmp/release.md
+              git log --oneline "${grange}" | awk -v repo="${GITHUB_REPOSITORY}" '{print "* [`" substr($1, 1, 7) "`](https://github.com/" repo "/commit/" substr($1, 1, 7) ") " substr($0, 9)}' >>/tmp/release.md
             else
-              git log --oneline "${grange}" | sed 's/^/* /' >> /tmp/release.md
+              git log --oneline "${grange}" | sed 's/^/* /' >>/tmp/release.md
             fi
             echo "${CYN}[DONE] out: /tmp/release.md${NUK}"
             printf "${CYN}%s%*s${NUK}\n" "[OUT]" 85 "" | tr " " "~"
@@ -454,7 +451,7 @@ jobs:
             printf "${CYN}%s%*s${NUK}\n" "[OUT]" 85 "" | tr " " "~"
           else
             printf "%s[WARN]%s EMPTY release notes... no previous tag found and FALLBACK=0\n" "${YEL}" "${NUK}"
-            echo "" > /tmp/release.md
+            echo "" >/tmp/release.md
           fi
 
       # create a create draft using the notes we generated in prv action
