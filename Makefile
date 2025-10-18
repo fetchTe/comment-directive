@@ -63,6 +63,8 @@ MIN ?= 1
 #: env flags
 #! [?1] fail fast (bail) on the first test or lint error
 BAIL ?= 1
+#! [?qjs] sets the QuickJs (qjs) path for the build_cli_quickjs target
+BIN_QJS ?= qjs
 #! [?DEV|PROD|TEST] sets the 'ENV' & 'IS_*' static build variables (else auto-set)
 ENV ?= DEV
 #! [?0] sets the 'IS_TEST' static build variable (always 1 if test target)
@@ -95,7 +97,6 @@ BFLG_MIN= --minify --sourcemap=none
 # @id:cross-os variable (assumes unix-y or msys2 on windows, if not, adjust accordingly)
 #------------------------------------------------------------------------------#
 BIN_BUN= bun
-BIN_QJS= qjs
 # required for help only; otherwise optional
 _VFLG  = $$([ "$(DEBUG)" = "1" ] && echo " --verbose" || echo "")
 BIN_AWK= awk
