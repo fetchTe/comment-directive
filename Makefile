@@ -247,6 +247,8 @@ build_declarations: ## builds typescript .d.{ts,mts,cts} declarations
 		--noEmit false \
 		--stripInternal \
 		--noCheck
+	@# remove quickjs type defs (no quotes, need to expand via shell)
+	@$(CMD_RM) $(DST)/cli.quickjs.d.* || true
 	@# a conveniently hacky method to generate *.d.{cts,mts}
 	@echo "Array.from(new Bun.Glob('**/*.d.ts').scanSync({cwd:'$(DST)',absolute:!0})).forEach(f=>{const c=(e,d=[f,f.slice(0,-2)+e])=>{$(DEBUG) && console.log(d.join(' -> '));try{require('fs').copyFileSync(...d)}catch(c){console.error(c)}};c('cts'),c('mts')});" \
 		| $(BIN_BUN) run -
