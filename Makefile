@@ -165,24 +165,24 @@ release: ## clean, setup, build, lint, test, aok (everything but the kitchen sin
 	@# rm/mk/and build fresh with ENV="TEST"
 	@$(MAKE) MSG="release:test" SYM="--" COLOR="1;36" _init
 	@$(CMD_RM) "$(DST)" || true
-	@$(CMD_MK) "$(DST)" || { $(MAKE) MSG="failed to create $(DST)" _erro; exit 1; }
+	@$(CMD_MK) "$(DST)" || { $(MAKE) MSG="failed to create: $(DST)" _erro; exit 1; }
 	@# buid in prod with IS_TEST (skip min builds)
-	@$(MAKE) ENV="PROD" TEST="1" MIN="0" _build_code_factory || { $(MAKE) MSG="build_code target failed... abort" _erro; exit 1; }
+	@$(MAKE) ENV="PROD" TEST="1" MIN="0" _build_code_factory || { $(MAKE) MSG="target failed: build_code ...abort" _erro; exit 1; }
 	@$(MAKE) build_cli
 	@# need to build quickjs executable to test against
 	@$(MAKE) build_cli_quickjs
 	@# lint es/ts (must run indv in order to exit properly)
 	@$(MAKE) MSG="release:lint" SYM="--" COLOR="1;36" _init
-	@$(MAKE) BAIL="1" lint_eslint || { $(MAKE) MSG="target lint_eslint failed..." _erro; exit 1; }
-	@$(MAKE) BAIL="1" lint_tsc || { $(MAKE) MSG="target lint_tsc failed..." _erro; exit 1; }
+	@$(MAKE) BAIL="1" lint_eslint || { $(MAKE) MSG="target failed: lint_eslint ...abort" _erro; exit 1; }
+	@$(MAKE) BAIL="1" lint_tsc || { $(MAKE) MSG="target failed: lint_tsc ...abort" _erro; exit 1; }
 	@# run tests (could also be run pre-lint if preferred)
-	@$(MAKE) _BPOS="test" _BOUT="$(TES)" ENV="TEST" _bun_factory
+	@$(MAKE) _BPOS="test" _BOUT="$(TES)" ENV="TEST" _bun_factory || { $(MAKE) MSG="target failed: 'test' ...abort" _erro; exit 1; }
 	@# remove exe/quickjs bin from release -> packaged seperatly via tagged release
-	@$(CMD_RM) $(DST)/comment-directive || true
+	@$(CMD_RM) "$(DST)/comment-directive" || true
 	@# everythings aok -> re-build with min builds and without IS_TEST
 	@$(MAKE) MSG="release:build" SYM="--" COLOR="1;36" _init
 	@$(CMD_RM) "$(DST)" || true
-	@$(CMD_MK) "$(DST)" || { $(MAKE) MSG="failed to create $(DST)" _erro; exit 1; }
+	@$(CMD_MK) "$(DST)" || { $(MAKE) MSG="failed to create: $(DST)" _erro; exit 1; }
 	@$(MAKE) ENV="PROD" TEST="0" MIN="$(MIN)" _build_code_factory
 	@$(MAKE) build_cli
 	@$(MAKE) MSG="release" LEN="-1" _done
