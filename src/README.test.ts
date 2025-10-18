@@ -246,17 +246,17 @@ console.log('best');`.trim();
       expect(commentDirective(ESCAPE_DISABLED, {reg: 1}, {escape: false})).toEqual(`
 456`.trim());
 
-      test('escape false with custom delimiter', () => {
-        const ESCAPE_FALSE_DELIM = `
-  // ###[IF]regex=1;sed=%\\w+%REPLACED%;
-  someWord123`.trim();
+    });
 
-        expect(commentDirective(ESCAPE_FALSE_DELIM, {regex: 1}, {
-          delimiter: '%',
-          escape: false,
-        })).toEqual('REPLACED');
-      });
+    test('escape false with custom delimiter', () => {
+      const ESCAPE_FALSE_DELIM = `
+// ###[IF]regex=1;sed=%\\w+%REPLACED%;
+someWord123`.trim();
 
+      expect(commentDirective(ESCAPE_FALSE_DELIM, {regex: 1}, {
+        delimiter: '%',
+        escape: false,
+      })).toEqual('REPLACED');
     });
 
 
