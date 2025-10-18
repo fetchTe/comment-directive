@@ -49,8 +49,24 @@ jobs:
       # install deps & make all
       - name: make::install
         run: make install
-      - name: make::release
-        run: make release
+
+      - name: verify::node_modules
+        run: |
+          set -eu
+          test -d ./node_modules  || (echo "node_modules not found!" && exit 1)
+
+      # make build
+      - name: make::build
+        run: make build
+
+      # make build_cli
+      - name: make::build_cli
+        run: make build_cli
+
+      # make build_cli_quickjs
+      - name: make::build_cli_quickjs
+        run: make build_cli_quickjs
+
       - name: verify build output
         run: |
           ls -la dist/
@@ -373,10 +389,22 @@ jobs:
         run: make all
 
       # download all built executables
-      - name: get executable assets
+      - name: download-artifact::qjs
         uses: actions/download-artifact@v4
         with:
-          path: dist
+          name: qjs
+          path: build
+
+      - name: list::build
+        run: ls -la build/
+
+      - name: chmod::qjs
+        run: chmod +x build/qjs
+
+      # the 'make release' target does it release: clean, setup, build, lint, test, aok (the entire jamboree)
+      # make release - need to specify local qjs to compile target in release
+      - name: make::release
+        run: BIN_QJS=build/qjs DEBUG=1 make release
           merge-multiple: true
       - name: list all assets
         run: ls -la dist/
