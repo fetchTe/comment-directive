@@ -66,11 +66,11 @@ jobs:
   #----------------------------------------------------------------------------#
   #@id::linux executable                                                       #
   #----------------------------------------------------------------------------#
-  linux:
+  quickjs:
     needs: setup
     runs-on: ubuntu-22.04
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         arch: [x86_64]
     steps:
@@ -106,7 +106,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: linux
+    needs: quickjs
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -133,23 +133,34 @@ jobs:
         run :  make install
 
       # download all built executables
-      - name: get::qjs:executable
+      - name: download-artifact::qjs
         uses: actions/download-artifact@v4
         with:
           path: build
           merge-multiple: true
 
-      - name: list::build
-        run: ls -la build/
+      - name: install::qjs
+        run: |
+          set -eu
+          ls -la build/
+          mkdir -p "${HOME}/.local/bin"
+          chmod +x build/qjs
+          mv build/qjs "${HOME}/.local/bin/qjs"
+          echo "${HOME}/.local/bin" >>"${GITHUB_PATH}"
+          ls -la "${HOME}/.local/bin/qjs"
 
-      # set perms
-      - name: chmod::qjs
-        run: chmod +x build/qjs
+      - name: install::qjs:verify
+        run: |
+          set -eu
+          # no --version and --help exits via 1 -> bit of a roundabout
+          qjs --help | grep "version" || (echo "qjs version not found!" && exit 1)
+
 
       # the 'make release' target does it release: clean, setup, build, lint, test, aok (the entire jamboree)
       # make release - need to specify local qjs to compile target in release
       - name: make::release
-        run: BIN_QJS=build/qjs DEBUG=1 make release
+        run: DEBUG=1 make release
+        # run: BIN_QJS=build/qjs DEBUG=1 make release
 
       # rm qjs
       - name: rm::build
