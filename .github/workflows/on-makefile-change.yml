@@ -25,8 +25,48 @@ on:
       - Makefile
 
 jobs:
+
+
+  quickjs:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: [x86_64]
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          repository: 'quickjs-ng/quickjs'
+          path: 'quickjs-ng'
+
+      - name: setup
+        uses: jirutka/setup-alpine@v1
+        with:
+          arch: ${{matrix.arch}}
+          packages: 'build-base make cmake'
+
+      - name: build::quickjs
+        shell: alpine.sh {0}
+        run: |
+          set -eu
+          cd quickjs-ng
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DQJS_BUILD_CLI_STATIC=ON ..
+          cd ..
+          cmake --build build --target qjs_exe -j$(getconf _NPROCESSORS_ONLN)
+
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: qjs
+          path: quickjs-ng/build/qjs
+
+
   build:
     runs-on: ubuntu-latest
+    needs: quickjs
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -50,7 +90,7 @@ jobs:
 
       - name: install::pdpmake
         run : |
-          #!/bin/sh
+          set -eu
           git clone https://github.com/rmyorston/pdpmake pdpmake-src
           cd pdpmake-src || exit
           make
@@ -59,6 +99,28 @@ jobs:
           echo "${HOME}/.local/bin" >>"${GITHUB_PATH}"
           cd ..
           rm -rf pdpmake-src
+
+      # download all built executables
+      - name: download-artifact::qjs
+        uses: actions/download-artifact@v4
+        with:
+          path: build
+          merge-multiple: true
+
+      - name: install::qjs
+        run: |
+          set -eu
+          ls -la build/
+          mkdir -p "${HOME}/.local/bin"
+          chmod +x build/qjs
+          mv build/qjs "${HOME}/.local/bin/qjs"
+          ls -la "${HOME}/.local/bin/qjs"
+
+      - name: install::qjs:verify
+        run: |
+          set -eu
+          # no --version and --help exits via 1 -> bit of a roundabout
+          qjs --help | grep "version" || (echo "qjs version not found!" && exit 1)
 
       - name: make::install
         run : pdpmake install

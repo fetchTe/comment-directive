@@ -69,13 +69,13 @@ jobs:
       - name: make::build_cli_quickjs
         run: make build_cli_quickjs
 
-      - name: verify build output
+      - name: verify::build
         run: |
           set -eu
           ls -la dist/
           test -f dist/cli.quickjs.js || (echo "dist/cli.quickjs.js not found!" && exit 1)
 
-      - name: upload built project
+      - name: upload::cli-build
         uses: actions/upload-artifact@v4
         with:
           name: cli-build
@@ -441,12 +441,11 @@ jobs:
       - name: make::release
         run: BIN_QJS=build/qjs DEBUG=1 make release
 
-      # download all built executables
-      - name: download-artifact::comment-directive:executables
-        uses: actions/download-artifact@v4
-        with:
-          path: build
-          merge-multiple: true
+      # removing qjs
+      - name: remove::build
+        run: |
+          set -eu
+          rm -rf build/
 
       - name: verify::output
         run: |
@@ -526,6 +525,13 @@ jobs:
             printf "%s[WARN]%s EMPTY release notes... no previous tag found and FALLBACK=0\n" "${YEL}" "${NUK}"
             echo "" >/tmp/release.md
           fi
+
+      # download all built executables for release-action
+      - name: download-artifact::comment-directive:executables
+        uses: actions/download-artifact@v4
+        with:
+          path: build
+          merge-multiple: true
 
       # create a create draft using the notes we generated in prv action
       - name: create::release-draft
