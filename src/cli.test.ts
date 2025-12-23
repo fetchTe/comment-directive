@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import type {SpawnSyncOptions} from 'node:child_process';
 import {
+  beforeAll,
   afterEach,
   beforeEach,
   describe,
@@ -13,12 +14,21 @@ import {
   test,
 } from 'bun:test';
 
+const HL = '#'.repeat(80) + '\n';
 const DIRNAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../');
+const NAME = getMeta().name;
+const DIST = path.join(DIRNAME, 'dist');
+let BIN_EXE = path.join(
+  DIST,
+  fs.readdirSync(DIST).filter(val => val.startsWith(NAME)).pop() ?? 'noop',
+);
+if (!fs.existsSync(BIN_EXE)) { BIN_EXE = path.join(DIRNAME, NAME); }
 let BIN: string[] = [];
 const BIN_TESTS = [
   ['node', path.join(DIRNAME, 'dist', 'bin.js')],
-  [path.join(DIRNAME, 'dist', getMeta().name), '--no-color'],
+  [BIN_EXE, '--no-color'],
 ];
+console.log(`${HL}BIN_TESTS:\n${BIN_TESTS.map(v => '  > ' + v.join(' ')).join('\n')}`);
 
 // remove any personal BUN_MAKE env vars
 const ENV = Object.fromEntries(
@@ -90,7 +100,7 @@ const EXPECTED_PROD = [
 
 const EXPECTED_DEFAULT = "console.log('always');";
 
-const HELP_USAGE = `${getMeta().name} [options...] `
+const HELP_USAGE = `${NAME} [options...] `
   + '[--directive=<value>...] <input>';
 
 const writeFixture = (dir: string, options: FixtureOptions = {}): string => {
@@ -104,8 +114,9 @@ const writeFixture = (dir: string, options: FixtureOptions = {}): string => {
 const runTestType = (binTest: string[]) => {
   BIN = binTest;
   const testType = binTest[0]?.split('/')?.pop() ?? 'BAD';
-  console.log('## test -> ' + testType);
   describe(`comment-directive cli -> ${testType}`, () => {
+    beforeAll(() => console.log(`\n${HL}# test -> ${testType}`));
+
     let tempDirs: string[] = [];
 
     beforeEach(() => {
@@ -329,4 +340,3 @@ echo "test"`,
 };
 
 BIN_TESTS.map(runTestType);
-
