@@ -3,7 +3,7 @@
 A brutally effective text preprocessor that uses comments as conditional directives. No need for separate `.template` files, no overly complicated DSL; just comments that do useful work.
 
 > Well-tested, isomorphic, dependency-free, slices and dices lines: ~300/µs, ~3,000/ms, and ~3,000,000/s;<br/>
-> Standalone [CLI](#cli) binary/executable (~2MiB; [linux/mac/windows](https://github.com/fetchTe/comment-directive/releases/latest));<br/>
+> Standalone [CLI](#cli) binary/executable (~2MiB; [linux/mac/windows](https://github.com/fetchTe/comment-directive/releases/latest)) and/or `npm` global [CLI](#cli);<br/>
 > But, as with anything [`RegExp`](https://en.wikipedia.org/wiki/Regular_expression), it's more like a well-oiled [ice sculpture](https://en.wikipedia.org/wiki/Ice_sculpture) chainsaw than a surgical blade
 
 
@@ -58,12 +58,19 @@ const anExample = (arg = [1, 2, 3]) => {
 #### ▎INSTALL
 
 ```sh
-# pick your poison
+# local install (as dev dependency)
 npm install --save-dev comment-directive
 bun  add --dev comment-directive
 pnpm add --save-dev comment-directive
 yarn add --dev comment-directive
+
+# global install (for cli usage)
+npm install -g comment-directive
+bun  add --global comment-directive
+pnpm add --global comment-directive
+yarn global add comment-directive
 ```
+
 <br/>
 
 
