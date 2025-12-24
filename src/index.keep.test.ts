@@ -290,7 +290,7 @@ log('chicken dinner');`;
 // @id::fn
 // -----------------------------------------------------------------------------
 describe('fn', () => {
-  type FnAction = (input: (string | number)[], id: string, idx: number)=> (string | number)[];
+  type FnAction = (input: (string | number)[], id: string, idx: number) => (string | number)[];
   const fn: FnAction = (input, id, _idx) => input.map(line => {
     if (id === 'distTo') {
       return String(line).replace(`'./`, `'../dist/`).replace('.ts', '.js');

@@ -402,7 +402,7 @@ describe('fn', () => {
     import { commentDirective } from './index.ts';
     import { type CommentOptions } from './index.ts';`;
 
-    type FnAction = (input: (string | number)[], id: string, idx: number)=> (string | number)[];
+    type FnAction = (input: (string | number)[], id: string, idx: number) => (string | number)[];
     const fn: FnAction = (input, id, _idx) => input.map(line => {
       if (id === 'distTo') {
         return String(line).replace(`'./`, `'../dist/`).replace('.ts', '.js');

@@ -178,8 +178,9 @@ const TYPESCRIPT_CONFIG = {
     '@stylistic/spaced-comment': ['warn', 'always', { exceptions: ['*', '-'] }],
     '@stylistic/switch-colon-spacing': ['warn', {after: true, before: false}],
     '@stylistic/template-curly-spacing': ['warn', 'never'],
-    '@stylistic/type-annotation-spacing': ['warn', { before: false, after: true }],
+    '@stylistic/type-annotation-spacing': ['warn'],
     '@stylistic/type-generic-spacing': ['warn'],
+
     '@stylistic/type-named-tuple-spacing': ['warn'],
     '@stylistic/wrap-iife': ['error', 'any'],
     '@stylistic/wrap-regex': 'warn',
