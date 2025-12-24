@@ -1,5 +1,16 @@
 # `CHANGELOG.md`
 
+## [`v2.1.0`](https://github.com/fetchTe/comment-directive/releases/tag/v2.1.0) - `2025-12-23`
+
+### ▎Changed
+
++ `devDependencies` updates and related ESLint config updates
+
+### ▎Fixed
+
++ package.json `bin` export
+
+
 
 ## [`v2.0.0`](https://github.com/fetchTe/comment-directive/releases/tag/v2.0.0) - `2025-07-03`
 
