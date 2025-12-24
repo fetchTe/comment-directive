@@ -9,7 +9,7 @@
  */
 export const toEntries = Object.entries as <
   T extends Record<PropertyKey, unknown>,
->(obj: T)=> ({
+>(obj: T) => ({
   [K in keyof T]: [K, T[K]]
 }[keyof T])[] & { 0: { [K in keyof T]: [K, T[K]] }[keyof T] };
 
@@ -21,7 +21,7 @@ export const toEntries = Object.entries as <
  */
 export const toKeys = Object.keys as <
   T extends Record<PropertyKey, unknown>,
->(obj: T)=> (keyof T)[] & { 0: keyof T };
+>(obj: T) => (keyof T)[] & { 0: keyof T };
 
 
 /**

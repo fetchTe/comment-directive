@@ -88,7 +88,7 @@ export type CommentOptions = {
   /* single-line comment/language support (default: c-like) */
   single?: [start: RegExp | string, end?: null | RegExp | string];
   /* 'fn' comment directive consumer (default: I => I) */
-  fn?: (input: (string | number)[], id: string, idx: number)=> (string | number)[];
+  fn?: (input: (string | number)[], id: string, idx: number) => (string | number)[];
 };
 
 // CommentOptions [R]equired
@@ -278,7 +278,6 @@ const isSedDirectiveG = (dir: Directive | null): dir is Directive<ActionSedRepla
 const toEscapedPattern = (pattern: string, regexEscape = true): string => {
   try {
     if (!regexEscape) { return pattern; }
-    // @ts-expect-error ingore & catch
     return RegExp.escape(pattern);
   } catch (_err) {
     return pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
