@@ -1,5 +1,16 @@
 # `CHANGELOG.md`
 
+> notable changes recorded herein; adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html)
+
+<br />
+
+## [`v2.1.1`](https://github.com/fetchTe/comment-directive/releases/tag/v2.1.1) - `2026-01-11`
+
+### ▎Changed
+
++ `devDependencies` minor bump updates
+
+
 ## [`v2.1.0`](https://github.com/fetchTe/comment-directive/releases/tag/v2.1.0) - `2025-12-23`
 
 ### ▎Changed
